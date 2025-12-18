@@ -1,0 +1,30 @@
+{
+  "network": {
+    "interface": null,
+    "bpf_filter": null
+  },
+  "detection": {
+    "model_path": "models/nids_model.joblib",
+    "threshold": 0.7,
+    "feature_window_size": 100
+  },
+  "prevention": {
+    "auto_block": false,
+    "block_threshold": 5,
+    "block_duration": 3600
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/nids.log",
+    "console": true
+  },
+  "alerts": {
+    "save_to_file": true,
+    "alert_file": "alerts/alerts.json",
+    "console_output": true
+  },
+  "analytics": {
+    "enable": true,
+    "report_interval": 300
+  }
+}
