@@ -24,7 +24,7 @@ def load_alerts(alert_file='alerts/alerts.json'):
         with open(alert_file, 'r') as f:
             alerts = json.load(f)
         return alerts
-    except Exception as e:
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
         print(f"{Fore.RED}Error loading alerts: {e}{Style.RESET_ALL}")
         return []
 
@@ -38,7 +38,7 @@ def load_block_history(history_file='alerts/block_history.json'):
         with open(history_file, 'r') as f:
             history = json.load(f)
         return history
-    except Exception as e:
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
         print(f"{Fore.RED}Error loading block history: {e}{Style.RESET_ALL}")
         return []
 

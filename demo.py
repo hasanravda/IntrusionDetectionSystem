@@ -6,6 +6,7 @@ Demonstrates NIDS functionality without requiring root privileges
 
 import sys
 import time
+import numpy as np
 from nids.ml_model import NIDSModel
 from nids.feature_extraction import FeatureExtractor
 from nids.detection_engine import DetectionEngine

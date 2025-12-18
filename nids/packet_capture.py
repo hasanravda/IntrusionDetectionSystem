@@ -4,7 +4,6 @@ Handles real-time packet capture using Scapy
 """
 
 from scapy.all import sniff, IP, TCP, UDP, ICMP, ARP
-from scapy.layers.inet import TCP, UDP
 import logging
 from datetime import datetime
 import threading

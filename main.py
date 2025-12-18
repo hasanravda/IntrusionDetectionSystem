@@ -19,7 +19,8 @@ from nids.detection_engine import DetectionEngine
 from nids.intrusion_prevention import IntrusionPrevention
 from nids.analytics import Analytics
 
-# Initialize colorama for Windows support
+# Initialize colorama for cross-platform color support
+# (Particularly needed for Windows terminal)
 init()
 
 # Global flag for graceful shutdown

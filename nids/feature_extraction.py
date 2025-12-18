@@ -176,7 +176,7 @@ class FeatureExtractor:
             else:
                 return [0] * 7
                 
-        except Exception as e:
+        except (AttributeError, KeyError, TypeError) as e:
             logger.error(f"Error extracting flow features: {e}")
             return [0] * 7
             

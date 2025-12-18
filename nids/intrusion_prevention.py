@@ -6,11 +6,36 @@ Auto-mitigation and IP blocking functionality
 import os
 import logging
 import subprocess
+import re
 from datetime import datetime
 from collections import defaultdict
 import json
 
 logger = logging.getLogger(__name__)
+
+
+def is_valid_ip(ip_address):
+    """
+    Validate IP address format to prevent command injection
+    
+    Args:
+        ip_address: IP address string to validate
+        
+    Returns:
+        bool: True if valid IP address
+    """
+    # IPv4 pattern
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    
+    if not re.match(ipv4_pattern, ip_address):
+        return False
+    
+    # Check each octet is valid (0-255)
+    try:
+        parts = ip_address.split('.')
+        return all(0 <= int(part) <= 255 for part in parts)
+    except (ValueError, AttributeError):
+        return False
 
 
 class IntrusionPrevention:
@@ -80,6 +105,11 @@ class IntrusionPrevention:
             bool: True if blocked successfully
         """
         try:
+            # Validate IP address to prevent command injection
+            if not is_valid_ip(ip_address):
+                logger.error(f"Invalid IP address format: {ip_address}")
+                return False
+                
             if ip_address in self.blocked_ips:
                 logger.warning(f"IP {ip_address} already blocked")
                 return False
@@ -124,6 +154,11 @@ class IntrusionPrevention:
             bool: True if unblocked successfully
         """
         try:
+            # Validate IP address
+            if not is_valid_ip(ip_address):
+                logger.error(f"Invalid IP address format: {ip_address}")
+                return False
+                
             if ip_address not in self.blocked_ips:
                 logger.warning(f"IP {ip_address} not in blocked list")
                 return False
