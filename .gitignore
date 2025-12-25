@@ -39,6 +39,7 @@ models/*.pkl
 models/*.joblib
 examples/*.joblib
 data/
+dataset/
 datasets/
 *.pcap
 alerts/
