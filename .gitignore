@@ -44,3 +44,7 @@ datasets/
 *.pcap
 alerts/
 blocked_ips.txt
+
+#output files
+flow_features.csv
+traffic.pcap
