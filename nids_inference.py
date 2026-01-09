@@ -5,8 +5,8 @@ import joblib
 # CONFIG
 # ==============================
 FLOW_CSV = "flow_features.csv"
-MODEL_PATH = "nids_xgb_multiclass.pkl"
-ENCODER_PATH = "attack_label_encoder.pkl"
+MODEL_PATH = "model/nids_xgb_multiclass.pkl"
+ENCODER_PATH = "model/attack_label_encoder.pkl"
 OUTPUT_CSV = "flow_predictions.csv"
 
 # ==============================
