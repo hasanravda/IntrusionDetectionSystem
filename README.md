@@ -1,11 +1,12 @@
 # Network Intrusion Detection System (NIDS)
 
-A Machine Learning-based Network Intrusion Detection System (NIDS) that monitors and analyzes network traffic in real-time to identify malicious activities and security breaches. This system provides comprehensive intrusion detection and prevention capabilities using Python, Scapy library, and machine learning algorithms.
+A Machine Learning-based Network Intrusion Detection System (NIDS) that monitors and analyzes network traffic in real-time to identify malicious activities and security breaches. This system provides comprehensive intrusion detection and prevention capabilities using Python, Scapy/NFStream libraries, and machine learning algorithms.
 
 ## Features
 
 ### Core Capabilities
 - **Real-time Packet Capture**: Uses Scapy library for capturing and analyzing network packets
+- **NetFlow Feature Extraction**: Supports nfstream for extracting NetFlow features from pcap files
 - **Machine Learning Detection**: Employs Random Forest and Gradient Boosting classifiers for accurate threat detection
 - **Intrusion Prevention**: Auto-blocking malicious IPs (IPS functionality)
 - **Detailed Packet Inspection**: Deep analysis of network packets with feature extraction

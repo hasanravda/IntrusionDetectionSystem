@@ -202,6 +202,47 @@ sniff(prn=analyze_packet, count=10)
 
 ---
 
+### 7. NFStream Integration (`nfstream_integration.py`)
+**Purpose**: Extract NetFlow features from pcap files using nfstream library
+
+**Features**:
+- Process pcap files with NFStreamer
+- Extract 50+ NetFlow features
+- Prepare data for NIDS training
+- Compatible with NetFlow v3 datasets
+
+**Usage**:
+```bash
+python3 examples/nfstream_integration.py capture.pcap -o features.csv
+python3 train_netflow.py features.csv
+```
+
+**Key Code**:
+```python
+from nfstream import NFStreamer
+import pandas as pd
+
+# Create NFStreamer to process pcap
+streamer = NFStreamer(source='capture.pcap')
+
+# Extract flows
+flows = []
+for flow in streamer:
+    flows.append({
+        'src_ip': flow.src_ip,
+        'dst_ip': flow.dst_ip,
+        'protocol': flow.protocol,
+        'bidirectional_packets': flow.bidirectional_packets,
+        'bidirectional_bytes': flow.bidirectional_bytes,
+        # ... more features
+    })
+
+df = pd.DataFrame(flows)
+df.to_csv('features.csv', index=False)
+```
+
+---
+
 ## 🚀 Quick Start
 
 1. **Install dependencies**:
