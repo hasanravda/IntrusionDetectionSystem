@@ -155,6 +155,7 @@ Edit `config.json` to customize NIDS behavior:
 
 ### Supported Datasets
 - **UQ-NIDS Dataset**: University of Queensland Network Intrusion Detection System dataset
+- **NetFlow v3 Datasets**: NF-UNSW-NB15-v3, NF-ToN-IoT-v3, NF-BoT-IoT-v3, NF-CSE-CIC-IDS2018-v3 (see [NETFLOW_V3.md](NETFLOW_V3.md))
 - Custom datasets in CSV format with appropriate features
 
 ### Feature Extraction
@@ -168,11 +169,16 @@ The system extracts 30+ features from each packet:
 ### Model Training
 To train the model with your own dataset:
 
-1. Prepare your dataset in CSV format with features and labels
-2. Run training mode:
+1. **For standard datasets** (binary classification):
 ```bash
-python main.py --train --dataset /path/to/dataset.csv
+python train_model.py dataset.csv -m random_forest
 ```
+
+2. **For NetFlow v3 datasets** (multi-class classification):
+```bash
+python train_netflow.py NF-UNSW-NB15-v3.csv
+```
+See [NETFLOW_V3.md](NETFLOW_V3.md) for complete NetFlow dataset documentation.
 
 ### Default Model
 The system includes a pre-trained default model for demonstration purposes. For production use, train with your specific network traffic data.
