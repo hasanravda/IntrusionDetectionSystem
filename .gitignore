@@ -21,6 +21,9 @@ wheels/
 *.egg
 MANIFEST
 
+flow_predictions.csv
+package-lock.json
+
 # Virtual environments
 venv/
 env/
