@@ -66,8 +66,7 @@ export const Settings = () => {
 
   const handleSave = () => {
     setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-    // In a real app, this would save to backend
+    setTimeout(() => setSaved(false), 3000); 
   };
 
   const handleReset = () => {

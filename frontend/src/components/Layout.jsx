@@ -40,8 +40,8 @@ export const Layout = () => {
                   <Shield className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-white">Nexus Security</h1>
-                  <p className="text-xs text-gray-400">Network Protection Platform</p>
+                  <h1 className="text-xl font-bold text-white">NIDS</h1>
+                  <p className="text-xs text-gray-400">Network Intrusion Detection System</p>
                 </div>
               </div>
             </div>
