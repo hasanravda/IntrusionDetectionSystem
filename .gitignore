@@ -19,33 +19,76 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv/
+
+# Environment files
 .env
+.env.local
+.env.*.local
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
 
-# Project specific
+# Logs
 logs/
 *.log
-models/*.pkl
-models/*.joblib
-examples/*.joblib
+*.log.*
+
+# ML Models (keep structure, ignore large files)
+# Uncomment below if you want to exclude model files
+# backend/model/*.pkl
+# backend/model/*.joblib
+
+# Data files
 data/
 dataset/
 datasets/
 *.pcap
+examples/*.joblib
+
+# FastAPI specific
+uploads/
+results/
+backend/uploads/
+backend/results/
+
+# Output files
+flow_features.csv
+flow_predictions.csv
+downloaded_*.csv
+predictions_*.csv
+input_*.csv
+
+# Security
 alerts/
 blocked_ips.txt
 
-#output files
-flow_features.csv
-traffic.pcap
-flow_predictions.csv
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+.DS_Store
