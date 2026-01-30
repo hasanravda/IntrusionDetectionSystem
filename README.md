@@ -52,7 +52,7 @@ IntrusionDetectionSystem/
 cd backend
 
 # Install all dependencies including FastAPI
-pip install -r requirements-api.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Start the FastAPI Server
