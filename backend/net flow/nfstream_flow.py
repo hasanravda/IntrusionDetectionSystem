@@ -10,7 +10,6 @@ def main():
 
     streamer = NFStreamer(
         source=PCAP_FILE,
-        statistical_analysis=True
     )
 
     flows = []
