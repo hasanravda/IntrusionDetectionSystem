@@ -280,7 +280,7 @@ async def predict_flows(request: PredictionRequest):
             results.append({
                 "flow_id": str(i),
                 "predicted_attack": pred,
-                "is_attack": pred.lower() != "benign"
+                "is_attack": str(pred.lower() != "benign")
             })
         
         return PredictionResponse(
