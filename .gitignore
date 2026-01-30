@@ -24,7 +24,7 @@ wheels/
 venv/
 env/
 ENV/
-
+.env
 # IDE
 .vscode/
 .idea/
@@ -48,3 +48,4 @@ blocked_ips.txt
 #output files
 flow_features.csv
 traffic.pcap
+flow_predictions.csv
