@@ -1,9 +1,0 @@
-numpy
-pandas
-scipy
-joblib
-scapy
-pyshark
-scikit-learn
-xgboost
-nfstream
