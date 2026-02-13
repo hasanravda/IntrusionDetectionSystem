@@ -8,7 +8,7 @@ A machine learning-based Network Intrusion Detection System with a FastAPI backe
 - 🤖 **ML-Powered Detection**: XGBoost-based multi-class attack classification
 - 🚀 **FastAPI Backend**: RESTful API for easy integration
 - 📊 **Multiple Attack Types**: Detect DDoS, DoS, Port Scans, and more
-- 📁 **CSV Processing**: Batch prediction from CSV files
+-  **CSV Processing**: Batch prediction from CSV files
 - 🌐 **Web Integration Ready**: CORS-enabled for frontend integration
 
 ## Project Structure
