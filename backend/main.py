@@ -50,6 +50,10 @@ ENCODER_PATH = "model/attack_label_encoder.pkl"
 UPLOAD_DIR = "uploads"
 RESULTS_DIR = "results"
 
+# Live capture configuration
+CAPTURE_INTERFACE = os.getenv("NIDS_CAPTURE_INTERFACE", "1")
+USE_TEST_PCAP_FALLBACK = os.getenv("NIDS_USE_TEST_PCAP", "false").lower() == "true"
+
 # Create directories if they don't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -165,6 +169,10 @@ def prepare_dataframe_for_inference(df_raw: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame ready for model inference
     """
+    if not expected_features:
+        # Defensive check – this should normally be set when the model loads
+        raise ValueError("Model features are not loaded. Ensure the model is loaded before inference.")
+
     df_ml = pd.DataFrame()
     
     for feature in expected_features:
@@ -437,17 +445,25 @@ async def get_statistics():
 
 
 @app.post("/scan/live", tags=["Live Capture"])
-async def live_network_scan(duration: int = 60):
+async def live_network_scan(duration: int = 30):
     """
-    Capture live network traffic and analyze for intrusions
+    Capture live network traffic and analyze for intrusions.
     
-    - **duration**: Duration of capture in seconds (default: 60)
+    - **duration**: Duration of capture in seconds (default: 30, allowed: 10–300)
     """
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
-        logger.info(f"Starting live network capture for {duration} seconds...")
+        # Basic validation to prevent unreasonable capture times
+        if duration < 10 or duration > 300:
+            raise HTTPException(
+                status_code=400,
+                detail="Capture duration must be between 10 and 300 seconds"
+            )
+
+        start_time = time.time()
+        logger.info(f"Starting live network capture for {duration} seconds on interface {CAPTURE_INTERFACE}...")
         
         # Create temporary PCAP file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -457,44 +473,53 @@ async def live_network_scan(duration: int = 60):
         # Capture live traffic using tshark/tcpdump (for Windows, use tshark)
         # For Linux: tcpdump -i any -w {temp_pcap} -G {duration} -W 1
         # For Windows: tshark needs to be installed
-        
+        capture_mode = "live"
+        capture_error: Optional[str] = None
+
         try:
             # Try tshark first (Wireshark command-line)
             capture_cmd = [
                 "tshark",
-                "-i", "1",  # Interface 1, adjust as needed
+                "-i", CAPTURE_INTERFACE,
                 "-a", f"duration:{duration}",
                 "-w", temp_pcap,
-                "-q"  # Quiet mode
+                "-q",  # Quiet mode
             ]
-            
+
             logger.info(f"Running capture command: {' '.join(capture_cmd)}")
             process = subprocess.run(
                 capture_cmd,
                 capture_output=True,
                 text=True,
-                timeout=duration + 10
+                timeout=duration + 10,
             )
-            
+
             if process.returncode != 0:
-                logger.warning(f"tshark failed: {process.stderr}")
-                # Fallback: create empty pcap or use existing traffic
-                raise FileNotFoundError("tshark not available")
-                
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            logger.warning(f"Packet capture failed: {str(e)}")
-            # Use existing traffic.pcap as fallback for testing
-            if os.path.exists("traffic.pcap"):
+                capture_error = process.stderr.strip()
+                logger.warning(f"tshark failed (code {process.returncode}): {capture_error}")
+                raise FileNotFoundError("tshark returned non-zero exit code")
+
+        except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.SubprocessError) as e:
+            capture_error = str(e)
+            logger.warning(f"Packet capture failed: {capture_error}")
+
+            if USE_TEST_PCAP_FALLBACK and os.path.exists("traffic.pcap"):
                 temp_pcap = "traffic.pcap"
-                logger.info("Using existing traffic.pcap for analysis")
+                capture_mode = "pcap_fallback"
+                logger.info("Using existing traffic.pcap for analysis (test fallback enabled)")
             else:
+                # Fail fast instead of silently falling back so the user knows capture is not live
                 raise HTTPException(
                     status_code=500,
-                    detail="Packet capture tool not available. Please install Wireshark/tshark."
+                    detail=(
+                        "Live packet capture failed. "
+                        "Ensure Wireshark/tshark is installed and NIDS_CAPTURE_INTERFACE is set correctly. "
+                        f"Error: {capture_error}"
+                    ),
                 )
         
         # Process PCAP with NFStream
-        logger.info(f"Processing PCAP file: {temp_pcap}")
+        logger.info(f"Processing PCAP file: {temp_pcap} (mode={capture_mode})")
         streamer = NFStreamer(source=temp_pcap)
         
         flows = []
@@ -565,9 +590,13 @@ async def live_network_scan(duration: int = 60):
                     warnings.append(alert)
         
         # Prepare response
+        elapsed_seconds = round(time.time() - start_time, 2)
         response = {
             'status': 'success',
             'duration': duration,
+            'actual_processing_seconds': elapsed_seconds,
+            'capture_mode': capture_mode,
+            'capture_error': capture_error,
             'total_flows': len(predictions),
             'attack_counts': attack_counts,
             'statistics': {

@@ -11,7 +11,8 @@ export const Dashboard = () => {
   const [attackTrends, setAttackTrends] = useState(null);
   const [eventHistory, setEventHistory] = useState([]);
   const [error, setError] = useState(null);
-  const [scanDuration, setScanDuration] = useState(60); // Default 60 seconds
+
+  const SCAN_DURATION_SECONDS = 30;
 
   const handleScanStart = async () => {
     setIsScanning(true);
@@ -25,13 +26,13 @@ export const Dashboard = () => {
         threats: 0,
         findings: [{
           type: 'info',
-          message: `Capturing network traffic for ${scanDuration} seconds...`,
+          message: `Capturing network traffic for ${SCAN_DURATION_SECONDS} seconds...`,
           ip: 'System'
         }]
       });
 
       // Call the backend live scan API
-      const response = await fetch(`${API_ENDPOINTS.liveScan}?duration=${scanDuration}`, {
+      const response = await fetch(`${API_ENDPOINTS.liveScan}?duration=${SCAN_DURATION_SECONDS}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,25 +116,6 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-4">
-      {/* Scan Duration Control */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Capture Duration (seconds)
-        </label>
-        <input
-          type="number"
-          min="10"
-          max="300"
-          value={scanDuration}
-          onChange={(e) => setScanDuration(parseInt(e.target.value))}
-          disabled={isScanning}
-          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <p className="mt-1 text-xs text-gray-400">
-          Recommended: 60 seconds for comprehensive analysis
-        </p>
-      </div>
-
       {/* Error Display */}
       {error && (
         <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 text-red-200">
