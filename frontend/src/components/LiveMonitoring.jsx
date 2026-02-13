@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Square, Activity, Globe, Shield, AlertTriangle } from 'lucide-react';
+import { Play, Pause, Square, Activity, Globe, Shield, AlertTriangle, Info } from 'lucide-react';
+import API_ENDPOINTS from '../config/api';
 
 export const LiveMonitoring = () => {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -19,8 +20,9 @@ export const LiveMonitoring = () => {
   });
 
   const [recentAlerts, setRecentAlerts] = useState([]);
+  const [captureError, setCaptureError] = useState(null);
 
-  // Generate dummy packet data
+  // Generate dummy packet data (for demo purposes when backend is not capturing live)
   const generatePacket = () => {
     const protocols = ['TCP', 'UDP', 'ICMP'];
     const sources = ['192.168.1.100', '10.0.0.50', '172.16.0.25', '203.0.113.45', '198.51.100.22'];
@@ -57,6 +59,8 @@ export const LiveMonitoring = () => {
     let interval;
     
     if (isCapturing) {
+      // Demo mode: Generate dummy packets for visualization
+      // In production, this would poll the backend or use WebSockets
       interval = setInterval(() => {
         // Add new packets
         const newPackets = Array.from({ length: Math.floor(Math.random() * 5) + 1 }, generatePacket);
@@ -100,6 +104,19 @@ export const LiveMonitoring = () => {
 
   return (
     <div className="space-y-6">
+      {/* Demo Mode Banner */}
+      <div className="bg-blue-900/50 border border-blue-500 rounded-lg p-4">
+        <div className="flex items-start space-x-3">
+          <Info className="w-5 h-5 text-blue-400 mt-0.5" />
+          <div>
+            <h4 className="text-white font-semibold">Demo Mode - Live Visualization</h4>
+            <p className="text-sm text-gray-300 mt-1">
+              This is a live packet visualization demo. For real network analysis, go to the Dashboard and click "Start Security Scan" to capture and analyze actual network traffic.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Control Panel */}
       <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
         <div className="flex items-center justify-between mb-6">
