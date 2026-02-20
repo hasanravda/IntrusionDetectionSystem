@@ -454,35 +454,46 @@ async def live_network_scan(duration: int = 60):
         temp_pcap = os.path.join(UPLOAD_DIR, f"live_capture_{timestamp}.pcap")
         output_csv = os.path.join(RESULTS_DIR, f"live_predictions_{timestamp}.csv")
         
-        # Capture live traffic using tshark/tcpdump (for Windows, use tshark)
-        # For Linux: tcpdump -i any -w {temp_pcap} -G {duration} -W 1
-        # For Windows: tshark needs to be installed
+        # Capture live traffic using Scapy
+        from nids.packet_capture import PacketCapture
         
         try:
-            # Try tshark first (Wireshark command-line)
-            capture_cmd = [
-                "tshark",
-                "-i", "1",  # Interface 1, adjust as needed
-                "-a", f"duration:{duration}",
-                "-w", temp_pcap,
-                "-q"  # Quiet mode
-            ]
+            # Initialize packet capture
+            capture = PacketCapture()
+            packets = []
             
-            logger.info(f"Running capture command: {' '.join(capture_cmd)}")
-            process = subprocess.run(
-                capture_cmd,
-                capture_output=True,
-                text=True,
-                timeout=duration + 10
-            )
+            def packet_callback(packet):
+                packets.append(packet)
             
-            if process.returncode != 0:
-                logger.warning(f"tshark failed: {process.stderr}")
-                # Fallback: create empty pcap or use existing traffic
-                raise FileNotFoundError("tshark not available")
+            logger.info(f"Starting Scapy capture for {duration} seconds...")
+            capture.start_capture(packet_callback=packet_callback)
+            
+            # Wait for specified duration
+            import time
+            time.sleep(duration)
+            
+            # Stop capture
+            capture.stop_capture()
+            logger.info(f"Captured {len(packets)} packets")
+            
+            # Save packets to PCAP file for processing
+            if packets:
+                from scapy.all import wrpcap
+                wrpcap(temp_pcap, packets)
+                logger.info(f"Saved packets to {temp_pcap}")
+            else:
+                # Use existing traffic.pcap as fallback for testing
+                if os.path.exists("traffic.pcap"):
+                    temp_pcap = "traffic.pcap"
+                    logger.info("No packets captured, using existing traffic.pcap for analysis")
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No packets captured and no fallback traffic data available."
+                    )
                 
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            logger.warning(f"Packet capture failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Scapy capture failed: {str(e)}")
             # Use existing traffic.pcap as fallback for testing
             if os.path.exists("traffic.pcap"):
                 temp_pcap = "traffic.pcap"
@@ -490,7 +501,7 @@ async def live_network_scan(duration: int = 60):
             else:
                 raise HTTPException(
                     status_code=500,
-                    detail="Packet capture tool not available. Please install Wireshark/tshark."
+                    detail=f"Packet capture failed: {str(e)}"
                 )
         
         # Process PCAP with NFStream

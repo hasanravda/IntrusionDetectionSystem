@@ -65,6 +65,7 @@ export const Alerts = () => {
     }
 
     setFilteredAlerts(filtered);
+
   }, [alerts, searchTerm, severityFilter, typeFilter]);
 
   const getSeverityColor = (severity) => {
@@ -73,9 +74,10 @@ export const Alerts = () => {
       high: 'bg-orange-500',
       medium: 'bg-yellow-500',
       low: 'bg-blue-500'
-    };
+    }; 
     return colors[severity] || 'bg-gray-500';
   };
+
 
   const getSeverityBgColor = (severity) => {
     const colors = {

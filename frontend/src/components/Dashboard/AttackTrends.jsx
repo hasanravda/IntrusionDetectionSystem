@@ -10,8 +10,6 @@ export const AttackTrends = ({ trends }) => {
       </div>
     );
   }
-
-  // Color mapping for different attack types
   const getColor = (name) => {
     if (name.toLowerCase() === 'benign') return '#10B981'; // Green
     if (name.includes('DDoS') || name.includes('DoS')) return '#EF4444'; // Red
@@ -57,8 +55,8 @@ export const AttackTrends = ({ trends }) => {
           {trends.map((item, index) => (
             <div key={index} className="flex justify-between items-center bg-white/5 rounded-lg p-3">
               <div className="flex items-center space-x-3">
-                <div 
-                  className="w-3 h-3 rounded-full" 
+                <div
+                  className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: getColor(item.name) }}
                 ></div>
                 <span className="text-gray-300">{item.name}</span>
