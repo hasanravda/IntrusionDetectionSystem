@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
-import { LiveMonitoring } from './components/LiveMonitoring';
+import { LiveMonitor } from './components/Dashboard/LiveMonitor';
 import { Alerts } from './components/Alerts';
 import { Analysis } from './components/Analysis';
 import { History } from './components/History';
@@ -22,7 +22,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'monitoring',
-        element: <LiveMonitoring />,
+        element: <LiveMonitor />,
       },
       {
         path: 'alerts',

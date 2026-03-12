@@ -22,7 +22,6 @@ export const AttackTrends = ({ trends }) => {
       <h3 className="text-lg font-bold text-white mb-4">Attack Distribution</h3>
       
       <div className="space-y-4">
-        {/* Bar Chart */}
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={trends}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

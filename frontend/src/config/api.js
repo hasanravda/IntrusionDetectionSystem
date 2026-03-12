@@ -17,6 +17,15 @@ export const API_ENDPOINTS = {
   
   // Live Capture
   liveScan: `${API_BASE_URL}/scan/live`,
+  scanResults: `${API_BASE_URL}/scan-results`,
+  scanStatus: `${API_BASE_URL}/scan-status`,
+  scanHistory: `${API_BASE_URL}/scan-history`,
+  
+  // Continuous Monitoring
+  startMonitoring: `${API_BASE_URL}/monitoring/start`,
+  stopMonitoring: `${API_BASE_URL}/monitoring/stop`,
+  monitoringStatus: `${API_BASE_URL}/monitoring/status`,
+  websocket: `${API_BASE_URL.replace('http', 'ws')}/ws`,
   
   // Files
   download: (filename) => `${API_BASE_URL}/download/${filename}`,
