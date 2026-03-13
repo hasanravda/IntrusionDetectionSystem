@@ -1,21 +1,58 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Calendar, Search, Download, Clock, AlertTriangle, Shield } from 'lucide-react';
+import API_ENDPOINTS from '../config/api';
 
 export const History = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('7d');
+  const [historyData, setHistoryData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Simple historical data without complex charts
-  const historyData = [
-    { id: 1, timestamp: '2024-01-30 14:30:00', type: 'DDoS Attack', severity: 'High', source: '192.168.1.100', destination: '10.0.0.50', status: 'Blocked', confidence: 95 },
-    { id: 2, timestamp: '2024-01-30 13:45:00', type: 'Port Scan', severity: 'Medium', source: '172.16.0.25', destination: '192.168.1.1', status: 'Blocked', confidence: 87 },
-    { id: 3, timestamp: '2024-01-30 12:20:00', type: 'Brute Force', severity: 'High', source: '203.0.113.45', destination: '10.0.0.100', status: 'Blocked', confidence: 92 },
-    { id: 4, timestamp: '2024-01-30 11:15:00', type: 'Malware Detection', severity: 'Critical', source: '198.51.100.22', destination: '192.168.1.200', status: 'Quarantine', confidence: 98 },
-    { id: 5, timestamp: '2024-01-30 10:30:00', type: 'SQL Injection', severity: 'Medium', source: '10.0.0.75', destination: '192.168.1.50', status: 'Blocked', confidence: 85 },
-    { id: 6, timestamp: '2024-01-30 09:45:00', type: 'Port Scan', severity: 'Low', source: '172.16.0.30', destination: '192.168.1.1', status: 'Detected', confidence: 78 },
-    { id: 7, timestamp: '2024-01-30 08:20:00', type: 'DDoS Attack', severity: 'High', source: '203.0.113.50', destination: '10.0.0.1', status: 'Blocked', confidence: 94 },
-    { id: 8, timestamp: '2024-01-30 07:10:00', type: 'Brute Force', severity: 'Medium', source: '192.168.1.150', destination: '10.0.0.25', status: 'Blocked', confidence: 88 }
-  ];
+  const mapScanToHistoryRow = (scan, index) => {
+    const attackTypes = scan.attack_breakdown && Object.keys(scan.attack_breakdown).length > 0
+      ? Object.keys(scan.attack_breakdown).join(', ')
+      : 'Benign Traffic';
+    const totalFlows = Number(scan.total_flows || 0);
+    const benignCount = Number(scan.benign_count || 0);
+    const benignRate = totalFlows > 0 ? Math.round((benignCount / totalFlows) * 100) : 0;
+
+    return {
+      id: index + 1,
+      timestamp: scan.timestamp,
+      type: attackTypes,
+      severity: scan.risk_level || 'Low',
+      source: scan.csv_file || 'N/A',
+      destination: `${totalFlows} flows`,
+      status: Number(scan.attack_count || 0) > 0 ? 'Detected' : 'Clean',
+      confidence: benignRate,
+    };
+  };
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await fetch(API_ENDPOINTS.scanHistory);
+        const data = await response.json();
+
+        if (!response.ok || data.status !== 'success') {
+          throw new Error(data.message || data.detail || 'Failed to load history');
+        }
+
+        const mapped = (data.history || []).map(mapScanToHistoryRow);
+        setHistoryData(mapped);
+      } catch (err) {
+        setError(err.message || 'Failed to load history');
+        setHistoryData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
 
   const getSeverityColor = (severity) => {
     switch(severity.toLowerCase()) {
@@ -32,15 +69,34 @@ export const History = () => {
       case 'blocked': return 'text-red-400 bg-red-500/20';
       case 'quarantine': return 'text-purple-400 bg-purple-500/20';
       case 'detected': return 'text-yellow-400 bg-yellow-500/20';
+      case 'clean': return 'text-green-400 bg-green-500/20';
       default: return 'text-gray-400 bg-gray-500/20';
     }
   };
 
+  const isWithinDateRange = (timestamp, range) => {
+    if (!timestamp) return false;
+    const eventDate = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - eventDate;
+
+    if (range === '24h') return diffMs <= 24 * 60 * 60 * 1000;
+    if (range === '7d') return diffMs <= 7 * 24 * 60 * 60 * 1000;
+    if (range === '30d') return diffMs <= 30 * 24 * 60 * 60 * 1000;
+    return true;
+  };
+
   const filteredData = historyData.filter(event => 
-    event.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.source.includes(searchTerm) ||
-    event.destination.includes(searchTerm)
+    isWithinDateRange(event.timestamp, dateRange) && (
+      event.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.destination.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
+
+  const avgConfidence = filteredData.length > 0
+    ? Math.round(filteredData.reduce((sum, e) => sum + e.confidence, 0) / filteredData.length)
+    : 0;
 
   const handleExport = () => {
     // Simple export functionality
@@ -72,6 +128,8 @@ export const History = () => {
       <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4">
         <h2 className="text-xl font-bold text-white mb-2">Event History</h2>
         <p className="text-gray-400">Historical security events and attack logs</p>
+        {isLoading && <p className="text-blue-300 text-sm mt-2">Loading history...</p>}
+        {error && <p className="text-red-300 text-sm mt-2">{error}</p>}
       </div>
 
       {/* Filters */}
@@ -138,7 +196,7 @@ export const History = () => {
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-blue-400">
-              {Math.round(filteredData.reduce((sum, e) => sum + e.confidence, 0) / filteredData.length)}%
+              {avgConfidence}%
             </p>
             <p className="text-gray-400 text-sm">Avg Confidence</p>
           </div>
@@ -164,15 +222,15 @@ export const History = () => {
             <tbody>
               {filteredData.map((event) => (
                 <tr key={event.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-4 text-gray-300 text-sm">{event.timestamp}</td>
+                  <td className="py-3 px-4 text-gray-300 text-sm">{new Date(event.timestamp).toLocaleString()}</td>
                   <td className="py-3 px-4 text-white text-sm">{event.type}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded text-xs ${getSeverityColor(event.severity)}`}>
                       {event.severity}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-gray-300 text-sm font-mono">{event.source}</td>
-                  <td className="py-3 px-4 text-gray-300 text-sm font-mono">{event.destination}</td>
+                  <td className="py-3 px-4 text-gray-300 text-sm">{event.source}</td>
+                  <td className="py-3 px-4 text-gray-300 text-sm">{event.destination}</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded text-xs ${getStatusColor(event.status)}`}>
                       {event.status}
@@ -181,6 +239,13 @@ export const History = () => {
                   <td className="py-3 px-4 text-gray-300 text-sm">{event.confidence}%</td>
                 </tr>
               ))}
+              {!isLoading && filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 px-4 text-center text-gray-400 text-sm">
+                    No history found for the selected filters.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
