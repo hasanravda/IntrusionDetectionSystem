@@ -9,8 +9,8 @@ export const Layout = () => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, color: 'from-blue-500 to-blue-600', path: '/dashboard' },
     { id: 'monitoring', label: 'Live Monitor', icon: Activity, color: 'from-green-500 to-green-600', path: '/monitoring' },
-    { id: 'alerts', label: 'Security Alerts', icon: AlertTriangle, color: 'from-red-500 to-red-600', path: '/alerts' },
-    { id: 'analysis', label: 'Threat Analysis', icon: Shield, color: 'from-purple-500 to-purple-600', path: '/analysis' },
+    // { id: 'alerts', label: 'Security Alerts', icon: AlertTriangle, color: 'from-red-500 to-red-600', path: '/alerts' },
+    // { id: 'analysis', label: 'Threat Analysis', icon: Shield, color: 'from-purple-500 to-purple-600', path: '/analysis' },
     { id: 'history', label: 'Event History', icon: History, color: 'from-orange-500 to-orange-600', path: '/history' },
     { id: 'settings', label: 'Settings', icon: Settings, color: 'from-gray-500 to-gray-600', path: '/settings' },
   ];
