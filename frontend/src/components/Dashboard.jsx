@@ -67,15 +67,10 @@ export const Dashboard = () => {
         
         // Update scan results with comprehensive data
         setScanResults({
-          safe: data.benign_count || 0,
-          warnings: Math.floor(data.attack_count * 0.3), // Estimate warnings
-          threats: Math.ceil(data.attack_count * 0.7),   // Estimate threats
-          findings: data.trends?.map(trend => ({
-            type: trend.name.toLowerCase() === 'benign' ? 'safe' : 
-                   trend.name.toLowerCase().includes('ddos') ? 'threat' : 'warning',
-            message: `${trend.name}: ${trend.count} flows (${trend.percentage}%)`,
-            ip: 'Network'
-          })) || []
+          total_flows: data.total_flows || 0,
+          benign_count: data.benign_count || 0,
+          attack_count: data.attack_count || 0,
+          trends: data.trends || []
         });
         
         console.log('Scan results loaded:', {
@@ -153,14 +148,13 @@ export const Dashboard = () => {
       
       // Fallback dummy data for demo
       setScanResults({
-        safe: 15,
-        warnings: 3,
-        threats: 2,
-        findings: [
-          { type: 'safe', message: 'Network traffic normal', ip: '192.168.1.1' },
-          { type: 'warning', message: 'Unusual port activity detected', ip: '192.168.1.100' },
-          { type: 'threat', message: 'Potential DDoS attack detected', ip: '203.0.113.45' },
-          { type: 'error', message: `Scan failed: ${error.message}`, ip: 'System' }
+        total_flows: 20,
+        benign_count: 15,
+        attack_count: 5,
+        trends: [
+          { name: 'Benign', count: 15, percentage: 75.0 },
+          { name: 'PortScan', count: 3, percentage: 15.0 },
+          { name: 'DDoS', count: 2, percentage: 10.0 }
         ]
       });
     }

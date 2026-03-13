@@ -50,6 +50,8 @@ MODEL_PATH = "model/nids_xgb_multiclass.pkl"
 ENCODER_PATH = "model/attack_label_encoder.pkl"
 UPLOAD_DIR = "uploads"
 RESULTS_DIR = "results"
+CONFIDENCE_THRESHOLD = float(os.getenv("NIDS_CONFIDENCE_THRESHOLD", "0.60"))
+LOW_CONFIDENCE_FALLBACK_LABEL = os.getenv("NIDS_LOW_CONFIDENCE_LABEL", "Benign")
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -197,7 +199,26 @@ def run_inference(df_ml: pd.DataFrame) -> List[str]:
     """
     y_pred = model.predict(df_ml)
     attack_labels = label_encoder.inverse_transform(y_pred)
-    return attack_labels.tolist()
+    final_labels = attack_labels.tolist()
+
+    # Confidence gating to reduce false positives on out-of-distribution traffic
+    if hasattr(model, "predict_proba"):
+        probabilities = model.predict_proba(df_ml)
+        max_probabilities = probabilities.max(axis=1)
+
+        low_confidence_count = 0
+        for i, (label, confidence) in enumerate(zip(final_labels, max_probabilities)):
+            if str(label).lower() != "benign" and float(confidence) < CONFIDENCE_THRESHOLD:
+                final_labels[i] = LOW_CONFIDENCE_FALLBACK_LABEL
+                low_confidence_count += 1
+
+        if low_confidence_count > 0:
+            logger.info(
+                f"Confidence gating relabeled {low_confidence_count}/{len(final_labels)} flows "
+                f"to '{LOW_CONFIDENCE_FALLBACK_LABEL}' (threshold={CONFIDENCE_THRESHOLD:.2f})"
+            )
+
+    return final_labels
 
 
 # ==============================
@@ -829,28 +850,57 @@ async def background_monitoring():
 async def get_scan_results():
     """Get latest scan results and attack statistics"""
     try:
-        # Find the most recent CSV file in results directory
+        # Find most recent result from primary and fallback CSV sources
+        csv_candidates = []
+
+        # Primary: live/API result files
         results_files = [f for f in os.listdir(RESULTS_DIR) if f.endswith('.csv')]
-        if not results_files:
+        for filename in results_files:
+            csv_path = os.path.join(RESULTS_DIR, filename)
+            try:
+                csv_candidates.append((csv_path, os.path.getmtime(csv_path), filename))
+            except OSError:
+                continue
+
+        # Fallback: baseline/generated predictions in backend root
+        fallback_files = [
+            "flow_predictions.csv",
+            "downloaded_predictions_20260130_145534.csv"
+        ]
+        for filename in fallback_files:
+            csv_path = filename
+            if os.path.exists(csv_path):
+                try:
+                    csv_candidates.append((csv_path, os.path.getmtime(csv_path), filename))
+                except OSError:
+                    continue
+
+        if not csv_candidates:
             return {
-                "status": "no_data", 
-                "message": "No scan results available",
+                "status": "no_data",
+                "message": "No scan results available yet. Start a scan to generate data.",
                 "total_flows": 0,
                 "benign_count": 0,
+                "attack_count": 0,
                 "attack_counts": {},
                 "trends": [],
                 "scan_summary": {}
             }
-        
-        latest_file = sorted(results_files)[-1]
-        csv_path = os.path.join(RESULTS_DIR, latest_file)
+
+        csv_path, _, latest_file = max(csv_candidates, key=lambda x: x[1])
         
         # Read CSV and compute comprehensive statistics
         df = pd.read_csv(csv_path)
         
-        # Get attack counts from prediction column
-        if 'prediction' in df.columns:
-            attack_counts = df['prediction'].value_counts().to_dict()
+        # Get attack counts from available prediction column
+        prediction_column = None
+        for col in ["prediction", "Predicted_Attack", "Predicted Attack"]:
+            if col in df.columns:
+                prediction_column = col
+                break
+
+        if prediction_column is not None:
+            attack_counts = df[prediction_column].astype(str).value_counts().to_dict()
         else:
             attack_counts = {}
         
@@ -890,7 +940,8 @@ async def get_scan_results():
             "attack_counts": attack_counts,
             "trends": trends,
             "scan_summary": scan_summary,
-            "csv_file": latest_file
+            "csv_file": latest_file,
+            "data_source": "live_scan" if csv_path.startswith(RESULTS_DIR) else "fallback"
         }
         
     except Exception as e:
