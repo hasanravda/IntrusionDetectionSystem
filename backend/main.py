@@ -825,6 +825,7 @@ async def background_monitoring():
             logger.error(f"Error in continuous monitoring: {str(e)}")
             scan_status = {"status": "error", "progress": 0, "message": f"Monitoring error: {str(e)}"}
             await asyncio.sleep(30)  # Wait before retry
+@app.get("/scan-results")
 async def get_scan_results():
     """Get latest scan results and attack statistics"""
     try:
