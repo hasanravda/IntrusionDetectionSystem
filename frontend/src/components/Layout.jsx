@@ -109,30 +109,6 @@ export const Layout = () => {
               );
             })}
           </nav>
-
-          {/* System Status Card */}
-          <div className="p-4 m-4 bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-white/10 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-white">System Health</span>
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">CPU Usage</span>
-                <span className="text-white">34%</span>
-              </div>
-              <div className="w-full bg-white/10 rounded-full h-1.5">
-                <div className="bg-gradient-to-r from-green-400 to-blue-500 h-1.5 rounded-full" style={{width: '34%'}}></div>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Memory</span>
-                <span className="text-white">62%</span>
-              </div>
-              <div className="w-full bg-white/10 rounded-full h-1.5">
-                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 h-1.5 rounded-full" style={{width: '62%'}}></div>
-              </div>
-            </div>
-          </div>
         </aside>
 
         {/* Main Content */}
