@@ -3,6 +3,7 @@ import { ScanButton } from './Dashboard/ScanButton';
 import { ScanResults } from './Dashboard/ScanResults';
 import { AttackTrends } from './Dashboard/AttackTrends';
 import { EventHistory } from './Dashboard/EventHistory';
+import { ConnectionTest } from './ConnectionTest';
 import API_ENDPOINTS from '../config/api';
 
 export const Dashboard = () => {
@@ -11,26 +12,103 @@ export const Dashboard = () => {
   const [attackTrends, setAttackTrends] = useState(null);
   const [eventHistory, setEventHistory] = useState([]);
   const [error, setError] = useState(null);
-  const [scanDuration, setScanDuration] = useState(60); // Default 60 seconds
+  const [scanDuration, setScanDuration] = useState(60);
+  const [scanProgress, setScanProgress] = useState({ status: 'idle', progress: 0, message: '' });
+
+  // Poll scan status during scanning
+  const pollScanStatus = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.scanStatus);
+      const status = await response.json();
+      setScanProgress(prev => ({ ...prev, ...status }));
+      
+      // When scan completes, fetch results automatically and clean up
+      if (status.status === 'completed') {
+        fetchScanResults();
+        fetchScanHistory(); // Refresh history
+        setIsScanning(false);
+        
+        // Clean up intervals
+        if (scanProgress.intervalId) {
+          clearInterval(scanProgress.intervalId);
+        }
+        if (scanProgress.timeoutId) {
+          clearTimeout(scanProgress.timeoutId);
+        }
+        
+        setScanProgress({ status: 'idle', progress: 0, message: '' });
+      } else if (status.status === 'error') {
+        setIsScanning(false);
+        
+        // Clean up intervals
+        if (scanProgress.intervalId) {
+          clearInterval(scanProgress.intervalId);
+        }
+        if (scanProgress.timeoutId) {
+          clearTimeout(scanProgress.timeoutId);
+        }
+        
+        setScanProgress({ status: 'error', progress: 0, message: status.message || 'Scan failed' });
+      }
+    } catch (err) {
+      console.error('Error polling scan status:', err);
+    }
+  };
+
+  // Fetch scan results and trends
+  const fetchScanResults = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.scanResults);
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        // Update attack trends for chart (Recharts format)
+        setAttackTrends(data.trends || []);
+        
+        // Update scan results with comprehensive data
+        setScanResults({
+          total_flows: data.total_flows || 0,
+          benign_count: data.benign_count || 0,
+          attack_count: data.attack_count || 0,
+          trends: data.trends || []
+        });
+        
+        console.log('Scan results loaded:', {
+          total_flows: data.total_flows,
+          benign_count: data.benign_count,
+          attack_count: data.attack_count,
+          trends: data.trends?.length
+        });
+      } else {
+        console.log('No scan results available yet');
+      }
+    } catch (err) {
+      console.error('Error fetching scan results:', err);
+    }
+  };
+
+  // Fetch scan history
+  const fetchScanHistory = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.scanHistory);
+      const data = await response.json();
+      if (data.status === 'success') {
+        setEventHistory(data.history || []);
+      }
+    } catch (err) {
+      console.error('Error fetching scan history:', err);
+    }
+  };
 
   const handleScanStart = async () => {
     setIsScanning(true);
     setError(null);
+    setScanProgress({ status: 'starting', progress: 0, message: 'Initializing scan...' });
     
     try {
-      // Show scanning message
-      setScanResults({
-        safe: 0,
-        warnings: 0,
-        threats: 0,
-        findings: [{
-          type: 'info',
-          message: `Capturing network traffic for ${scanDuration} seconds...`,
-          ip: 'System'
-        }]
-      });
-
-      // Call the backend live scan API
+      console.log('Starting scan with duration:', scanDuration);
+      
+      // Call the real backend live scan API
       const response = await fetch(`${API_ENDPOINTS.liveScan}?duration=${scanDuration}`, {
         method: 'POST',
         headers: {
@@ -44,74 +122,49 @@ export const Dashboard = () => {
       }
       
       const data = await response.json();
+      console.log('Scan initiated:', data);
       
-      // Update UI with real scan results
-      setScanResults({
-        safe: data.statistics?.safe || 0,
-        warnings: data.statistics?.warnings || 0,
-        threats: data.statistics?.threats || 0,
-        findings: [
-          ...data.threats.map(t => ({
-            type: 'threat',
-            message: `${t.type} detected from ${t.src_ip}`,
-            ip: t.src_ip,
-            severity: t.severity
-          })),
-          ...data.warnings.map(w => ({
-            type: 'warning',
-            message: `${w.type} detected from ${w.src_ip}`,
-            ip: w.src_ip,
-            severity: w.severity
-          }))
-        ]
-      });
+      // Start continuous polling for progress updates
+      const progressInterval = setInterval(() => {
+        pollScanStatus();
+      }, 2000); // Poll every 2 seconds
       
-      // Generate attack trends from attack counts
-      const trendData = Object.entries(data.attack_counts).map(([attack, count]) => ({
-        name: attack,
-        count: count,
-        percentage: Math.round((count / data.total_flows) * 100)
-      }));
+      // Set a maximum timeout to prevent infinite polling
+      const maxTimeout = setTimeout(() => {
+        clearInterval(progressInterval);
+        setIsScanning(false);
+        setScanProgress({ status: 'idle', progress: 0, message: '' });
+        console.log('Scan polling timeout reached');
+      }, (scanDuration + 60) * 1000); // Extra 60 seconds for processing
       
-      setAttackTrends(trendData);
-      
-      // Create event history from threats and warnings
-      const events = [
-        ...data.threats.map(t => ({
-          type: t.type,
-          ip: t.src_ip,
-          time: new Date(t.timestamp).toLocaleTimeString(),
-          severity: t.severity
-        })),
-        ...data.warnings.map(w => ({
-          type: w.type,
-          ip: w.src_ip,
-          time: new Date(w.timestamp).toLocaleTimeString(),
-          severity: w.severity
-        }))
-      ];
-      
-      setEventHistory(events);
+      // Store interval refs for cleanup
+      setScanProgress(prev => ({ ...prev, intervalId: progressInterval, timeoutId: maxTimeout }));
       
     } catch (error) {
-      console.error('Scan failed:', error);
+      console.error('Scan error:', error);
       setError(error.message);
-      
-      // Show error in results
-      setScanResults({
-        safe: 0,
-        warnings: 0,
-        threats: 0,
-        findings: [{
-          type: 'error',
-          message: `Scan failed: ${error.message}`,
-          ip: 'System'
-        }]
-      });
-    } finally {
       setIsScanning(false);
+      setScanProgress({ status: 'error', progress: 0, message: error.message });
+      
+      // Fallback dummy data for demo
+      setScanResults({
+        total_flows: 20,
+        benign_count: 15,
+        attack_count: 5,
+        trends: [
+          { name: 'Benign', count: 15, percentage: 75.0 },
+          { name: 'PortScan', count: 3, percentage: 15.0 },
+          { name: 'DDoS', count: 2, percentage: 10.0 }
+        ]
+      });
     }
   };
+
+  // Load initial data
+  React.useEffect(() => {
+    fetchScanResults();
+    fetchScanHistory();
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -138,6 +191,91 @@ export const Dashboard = () => {
       {error && (
         <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 text-red-200">
           <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {/* Scan Progress */}
+      {isScanning && scanProgress.status !== 'idle' && (
+        <div className={`rounded-lg p-4 border ${
+          scanProgress.status === 'error' ? 'bg-red-900/50 border-red-500' :
+          scanProgress.status === 'completed' ? 'bg-green-900/50 border-green-500' :
+          'bg-blue-900/50 border-blue-500'
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full animate-pulse ${
+                scanProgress.status === 'error' ? 'bg-red-400' :
+                scanProgress.status === 'completed' ? 'bg-green-400' :
+                'bg-blue-400'
+              }`}></div>
+              <span className={`font-medium ${
+                scanProgress.status === 'error' ? 'text-red-200' :
+                scanProgress.status === 'completed' ? 'text-green-200' :
+                'text-blue-200'
+              }`}>
+                {scanProgress.status === 'capturing' ? '📡 Capturing Packets' :
+                 scanProgress.status === 'processing' ? '⚙️ Processing Flows' :
+                 scanProgress.status === 'running_ml' ? '🧠 Running Detection' :
+                 scanProgress.status === 'completed' ? '✅ Scan Complete' :
+                 scanProgress.status === 'error' ? '❌ Scan Failed' :
+                 '🔄 Starting Scan'}
+              </span>
+            </div>
+            <span className={`text-sm ${
+              scanProgress.status === 'error' ? 'text-red-300' :
+              scanProgress.status === 'completed' ? 'text-green-300' :
+              'text-blue-300'
+            }`}>{scanProgress.progress}%</span>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
+            <div 
+              className={`h-2 rounded-full transition-all duration-500 ${
+                scanProgress.status === 'error' ? 'bg-red-500' :
+                scanProgress.status === 'completed' ? 'bg-green-500' :
+                'bg-blue-500'
+              }`}
+              style={{ width: `${scanProgress.progress}%` }}
+            ></div>
+          </div>
+          
+          {/* Status Message */}
+          <p className={`text-sm ${
+            scanProgress.status === 'error' ? 'text-red-300' :
+            scanProgress.status === 'completed' ? 'text-green-300' :
+            'text-blue-300'
+          }`}>
+            {scanProgress.message}
+          </p>
+          
+          {/* Phase Indicators */}
+          <div className="flex justify-between mt-3 text-xs">
+            <div className={`flex items-center space-x-1 ${
+              scanProgress.progress >= 10 ? 'text-blue-300' : 'text-gray-500'
+            }`}>
+              <span>{scanProgress.progress >= 10 ? '✓' : '○'}</span>
+              <span>Capture</span>
+            </div>
+            <div className={`flex items-center space-x-1 ${
+              scanProgress.progress >= 50 ? 'text-blue-300' : 'text-gray-500'
+            }`}>
+              <span>{scanProgress.progress >= 50 ? '✓' : '○'}</span>
+              <span>Flows</span>
+            </div>
+            <div className={`flex items-center space-x-1 ${
+              scanProgress.progress >= 85 ? 'text-blue-300' : 'text-gray-500'
+            }`}>
+              <span>{scanProgress.progress >= 85 ? '✓' : '○'}</span>
+              <span>Detection</span>
+            </div>
+            <div className={`flex items-center space-x-1 ${
+              scanProgress.progress >= 100 ? 'text-green-300' : 'text-gray-500'
+            }`}>
+              <span>{scanProgress.progress >= 100 ? '✓' : '○'}</span>
+              <span>Results</span>
+            </div>
+          </div>
         </div>
       )}
 

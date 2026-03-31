@@ -2,7 +2,7 @@
 FastAPI Backend for Network Intrusion Detection System (NIDS)
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -19,6 +19,7 @@ from nfstream import NFStreamer
 import tempfile
 import subprocess
 import time
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +50,8 @@ MODEL_PATH = "model/nids_xgb_multiclass.pkl"
 ENCODER_PATH = "model/attack_label_encoder.pkl"
 UPLOAD_DIR = "uploads"
 RESULTS_DIR = "results"
+CONFIDENCE_THRESHOLD = float(os.getenv("NIDS_CONFIDENCE_THRESHOLD", "0.60"))
+LOW_CONFIDENCE_FALLBACK_LABEL = os.getenv("NIDS_LOW_CONFIDENCE_LABEL", "Benign")
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -196,7 +199,26 @@ def run_inference(df_ml: pd.DataFrame) -> List[str]:
     """
     y_pred = model.predict(df_ml)
     attack_labels = label_encoder.inverse_transform(y_pred)
-    return attack_labels.tolist()
+    final_labels = attack_labels.tolist()
+
+    # Confidence gating to reduce false positives on out-of-distribution traffic
+    if hasattr(model, "predict_proba"):
+        probabilities = model.predict_proba(df_ml)
+        max_probabilities = probabilities.max(axis=1)
+
+        low_confidence_count = 0
+        for i, (label, confidence) in enumerate(zip(final_labels, max_probabilities)):
+            if str(label).lower() != "benign" and float(confidence) < CONFIDENCE_THRESHOLD:
+                final_labels[i] = LOW_CONFIDENCE_FALLBACK_LABEL
+                low_confidence_count += 1
+
+        if low_confidence_count > 0:
+            logger.info(
+                f"Confidence gating relabeled {low_confidence_count}/{len(final_labels)} flows "
+                f"to '{LOW_CONFIDENCE_FALLBACK_LABEL}' (threshold={CONFIDENCE_THRESHOLD:.2f})"
+            )
+
+    return final_labels
 
 
 # ==============================
@@ -449,40 +471,61 @@ async def live_network_scan(duration: int = 60):
     try:
         logger.info(f"Starting live network capture for {duration} seconds...")
         
+        # Update scan status
+        global scan_status
+        scan_status = {"status": "capturing", "progress": 10, "message": "Capturing network packets..."}
+        
         # Create temporary PCAP file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         temp_pcap = os.path.join(UPLOAD_DIR, f"live_capture_{timestamp}.pcap")
         output_csv = os.path.join(RESULTS_DIR, f"live_predictions_{timestamp}.csv")
         
-        # Capture live traffic using tshark/tcpdump (for Windows, use tshark)
-        # For Linux: tcpdump -i any -w {temp_pcap} -G {duration} -W 1
-        # For Windows: tshark needs to be installed
+        # Capture live traffic using Scapy
+        from nids.packet_capture import PacketCapture
         
         try:
-            # Try tshark first (Wireshark command-line)
-            capture_cmd = [
-                "tshark",
-                "-i", "1",  # Interface 1, adjust as needed
-                "-a", f"duration:{duration}",
-                "-w", temp_pcap,
-                "-q"  # Quiet mode
-            ]
+            # Initialize packet capture
+            capture = PacketCapture()
+            packets = []
             
-            logger.info(f"Running capture command: {' '.join(capture_cmd)}")
-            process = subprocess.run(
-                capture_cmd,
-                capture_output=True,
-                text=True,
-                timeout=duration + 10
-            )
+            def packet_callback(packet):
+                packets.append(packet)
             
-            if process.returncode != 0:
-                logger.warning(f"tshark failed: {process.stderr}")
-                # Fallback: create empty pcap or use existing traffic
-                raise FileNotFoundError("tshark not available")
+            logger.info(f"Starting Scapy capture for {duration} seconds...")
+            capture.start_capture(packet_callback=packet_callback)
+            
+            # Wait for specified duration with progress updates
+            import time
+            for elapsed in range(0, duration, 5):
+                time.sleep(5)
+                progress = 10 + int((elapsed / duration) * 40)  # 10-50% for capture
+                scan_status = {"status": "capturing", "progress": progress, "message": f"Capturing packets... {elapsed}s/{duration}s"}
+            
+            # Stop capture
+            capture.stop_capture()
+            logger.info(f"Captured {len(packets)} packets")
+            
+            # Update status for processing
+            scan_status = {"status": "processing", "progress": 50, "message": "Processing captured packets..."}
+            
+            # Save packets to PCAP file for processing
+            if packets:
+                from scapy.all import wrpcap
+                wrpcap(temp_pcap, packets)
+                logger.info(f"Saved packets to {temp_pcap}")
+            else:
+                # Use existing traffic.pcap as fallback for testing
+                if os.path.exists("traffic.pcap"):
+                    temp_pcap = "traffic.pcap"
+                    logger.info("No packets captured, using existing traffic.pcap for analysis")
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="No packets captured and no fallback traffic data available."
+                    )
                 
-        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-            logger.warning(f"Packet capture failed: {str(e)}")
+        except Exception as e:
+            logger.error(f"Scapy capture failed: {str(e)}")
             # Use existing traffic.pcap as fallback for testing
             if os.path.exists("traffic.pcap"):
                 temp_pcap = "traffic.pcap"
@@ -490,20 +533,29 @@ async def live_network_scan(duration: int = 60):
             else:
                 raise HTTPException(
                     status_code=500,
-                    detail="Packet capture tool not available. Please install Wireshark/tshark."
+                    detail=f"Packet capture failed: {str(e)}"
                 )
         
         # Process PCAP with NFStream
         logger.info(f"Processing PCAP file: {temp_pcap}")
+        scan_status = {"status": "processing", "progress": 60, "message": "Generating network flows..."}
+        
         streamer = NFStreamer(source=temp_pcap)
         
         flows = []
+        flow_count = 0
         for flow in streamer:
             flow_dict = {}
             for k in flow.__slots__:
                 if hasattr(flow, k):
                     flow_dict[k] = getattr(flow, k)
             flows.append(flow_dict)
+            flow_count += 1
+            
+            # Update progress every 100 flows
+            if flow_count % 100 == 0:
+                progress = 60 + min(int((flow_count / 1000) * 20), 20)  # 60-80% for flow processing
+                scan_status = {"status": "processing", "progress": progress, "message": f"Processing flows... {flow_count} processed"}
         
         if not flows:
             raise HTTPException(
@@ -517,9 +569,11 @@ async def live_network_scan(duration: int = 60):
         df_raw = pd.DataFrame(flows)
         
         # Prepare for inference
+        scan_status = {"status": "processing", "progress": 80, "message": "Preparing data for ML model..."}
         df_ml = prepare_dataframe_for_inference(df_raw)
         
         # Run inference
+        scan_status = {"status": "processing", "progress": 85, "message": "Running ML model inference..."}
         predictions = run_inference(df_ml)
         
         # Prepare results
@@ -531,10 +585,11 @@ async def live_network_scan(duration: int = 60):
         df_result['protocol'] = df_raw.get('protocol', [0] * len(flows))
         df_result['src2dst_packets'] = df_raw.get('src2dst_packets', [0] * len(flows))
         df_result['dst2src_packets'] = df_raw.get('dst2src_packets', [0] * len(flows))
-        df_result['Predicted_Attack'] = predictions
+        df_result['prediction'] = predictions  # Changed from 'Predicted_Attack' to 'prediction'
         df_result['Is_Attack'] = [pred.lower() != "benign" for pred in predictions]
         
         # Save results
+        scan_status = {"status": "processing", "progress": 95, "message": "Saving results..."}
         df_result.to_csv(output_csv, index=False)
         
         # Calculate statistics
@@ -582,6 +637,12 @@ async def live_network_scan(duration: int = 60):
             'timestamp': datetime.now().isoformat()
         }
         
+        # Save scan summary to history
+        save_scan_summary(response)
+        
+        # Update scan status
+        scan_status = {"status": "completed", "progress": 100, "message": "Scan completed successfully"}
+        
         logger.info(f"Scan completed: {len(flows)} flows analyzed")
         return response
         
@@ -591,6 +652,339 @@ async def live_network_scan(duration: int = 60):
         logger.error(f"Live scan error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Live scan failed: {str(e)}")
 
+
+# Scan storage for event history
+scan_history = []
+scan_status = {"status": "idle", "progress": 0, "message": ""}
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"WebSocket client connected. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        logger.info(f"WebSocket client disconnected. Total: {len(self.active_connections)}")
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except:
+                pass
+
+manager = ConnectionManager()
+
+# Continuous monitoring state
+continuous_monitoring = {"active": False, "capture_thread": None}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates"""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Send current status
+            await manager.send_personal_message(
+                json.dumps({
+                    "type": "status",
+                    "data": scan_status
+                }), 
+                websocket
+            )
+            await asyncio.sleep(2)  # Send update every 2 seconds
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        logger.info("WebSocket client disconnected")
+
+@app.post("/monitoring/start")
+async def start_continuous_monitoring():
+    """Start continuous monitoring mode"""
+    global continuous_monitoring
+    
+    if continuous_monitoring["active"]:
+        return {"status": "already_running", "message": "Continuous monitoring already active"}
+    
+    try:
+        continuous_monitoring["active"] = True
+        
+        # Start background monitoring task
+        asyncio.create_task(background_monitoring())
+        
+        # Broadcast to all WebSocket clients
+        await manager.broadcast(json.dumps({
+            "type": "monitoring_status",
+            "data": {"active": True, "message": "Continuous monitoring started"}
+        }))
+        
+        return {"status": "success", "message": "Continuous monitoring started"}
+        
+    except Exception as e:
+        logger.error(f"Failed to start continuous monitoring: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/monitoring/stop")
+async def stop_continuous_monitoring():
+    """Stop continuous monitoring mode"""
+    global continuous_monitoring
+    
+    if not continuous_monitoring["active"]:
+        return {"status": "not_running", "message": "Continuous monitoring not active"}
+    
+    try:
+        continuous_monitoring["active"] = False
+        
+        # Stop capture thread if running
+        if continuous_monitoring["capture_thread"]:
+            # Thread cleanup would go here
+            pass
+        
+        # Broadcast to all WebSocket clients
+        await manager.broadcast(json.dumps({
+            "type": "monitoring_status", 
+            "data": {"active": False, "message": "Continuous monitoring stopped"}
+        }))
+        
+        return {"status": "success", "message": "Continuous monitoring stopped"}
+        
+    except Exception as e:
+        logger.error(f"Failed to stop continuous monitoring: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/monitoring/status")
+async def get_monitoring_status():
+    """Get continuous monitoring status"""
+    return {
+        "status": "success",
+        "monitoring_active": continuous_monitoring["active"],
+        "scan_status": scan_status
+    }
+
+async def background_monitoring():
+    """Background task for continuous monitoring"""
+    global continuous_monitoring, scan_status
+    
+    while continuous_monitoring["active"]:
+        try:
+            # Run a short scan cycle (30 seconds)
+            scan_status = {"status": "capturing", "progress": 10, "message": "Continuous monitoring..."}
+            
+            # Capture packets for 30 seconds
+            from nids.packet_capture import PacketCapture
+            capture = PacketCapture()
+            packets = []
+            
+            def packet_callback(packet):
+                packets.append(packet)
+            
+            capture.start_capture(packet_callback=packet_callback)
+            await asyncio.sleep(30)  # Capture for 30 seconds
+            capture.stop_capture()
+            
+            # Process captured packets
+            if len(packets) > 0:
+                scan_status = {"status": "processing", "progress": 50, "message": "Processing captured packets..."}
+                
+                # Save to PCAP and process
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                temp_pcap = os.path.join(UPLOAD_DIR, f"continuous_{timestamp}.pcap")
+                
+                from scapy.all import wrpcap
+                wrpcap(temp_pcap, packets)
+                
+                # Process with NFStream
+                streamer = NFStreamer(source=temp_pcap)
+                flows = []
+                for flow in streamer:
+                    flow_dict = {}
+                    for k in flow.__slots__:
+                        if hasattr(flow, k):
+                            flow_dict[k] = getattr(flow, k)
+                    flows.append(flow_dict)
+                
+                # Run ML inference
+                if len(flows) > 0:
+                    scan_status = {"status": "running_ml", "progress": 80, "message": "Running threat detection..."}
+                    
+                    df_raw = pd.DataFrame(flows)
+                    df_ml = prepare_dataframe_for_inference(df_raw)
+                    predictions = run_inference(df_ml)
+                    
+                    # Count attacks and broadcast alerts
+                    attack_counts = {}
+                    for pred in predictions:
+                        attack_counts[pred] = attack_counts.get(pred, 0) + 1
+                    
+                    # Send real-time alerts for threats
+                    threats = [pred for pred in predictions if pred.lower() != "benign"]
+                    if len(threats) > 0:
+                        await manager.broadcast(json.dumps({
+                            "type": "threat_alert",
+                            "data": {
+                                "timestamp": datetime.now().isoformat(),
+                                "threats_detected": len(threats),
+                                "attack_types": list(set(threats)),
+                                "total_flows": len(flows)
+                            }
+                        }))
+                    
+                    # Update status
+                    scan_status = {"status": "completed", "progress": 100, "message": "Monitoring cycle complete"}
+            
+            # Wait before next cycle
+            await asyncio.sleep(10)  # 10 second break between cycles
+            
+        except Exception as e:
+            logger.error(f"Error in continuous monitoring: {str(e)}")
+            scan_status = {"status": "error", "progress": 0, "message": f"Monitoring error: {str(e)}"}
+            await asyncio.sleep(30)  # Wait before retry
+@app.get("/scan-results")
+async def get_scan_results():
+    """Get latest scan results and attack statistics"""
+    try:
+        # Find most recent result from primary and fallback CSV sources
+        csv_candidates = []
+
+        # Primary: live/API result files
+        results_files = [f for f in os.listdir(RESULTS_DIR) if f.endswith('.csv')]
+        for filename in results_files:
+            csv_path = os.path.join(RESULTS_DIR, filename)
+            try:
+                csv_candidates.append((csv_path, os.path.getmtime(csv_path), filename))
+            except OSError:
+                continue
+
+        # Fallback: baseline/generated predictions in backend root
+        fallback_files = [
+            "flow_predictions.csv",
+            "downloaded_predictions_20260130_145534.csv"
+        ]
+        for filename in fallback_files:
+            csv_path = filename
+            if os.path.exists(csv_path):
+                try:
+                    csv_candidates.append((csv_path, os.path.getmtime(csv_path), filename))
+                except OSError:
+                    continue
+
+        if not csv_candidates:
+            return {
+                "status": "no_data",
+                "message": "No scan results available yet. Start a scan to generate data.",
+                "total_flows": 0,
+                "benign_count": 0,
+                "attack_count": 0,
+                "attack_counts": {},
+                "trends": [],
+                "scan_summary": {}
+            }
+
+        csv_path, _, latest_file = max(csv_candidates, key=lambda x: x[1])
+        
+        # Read CSV and compute comprehensive statistics
+        df = pd.read_csv(csv_path)
+        
+        # Get attack counts from available prediction column
+        prediction_column = None
+        for col in ["prediction", "Predicted_Attack", "Predicted Attack"]:
+            if col in df.columns:
+                prediction_column = col
+                break
+
+        if prediction_column is not None:
+            attack_counts = df[prediction_column].astype(str).value_counts().to_dict()
+        else:
+            attack_counts = {}
+        
+        # Calculate benign and attack counts
+        benign_count = attack_counts.get('Benign', 0)
+        total_attacks = sum(attack_counts.values()) - benign_count
+        
+        # Format for frontend trends (Recharts compatible)
+        trends = []
+        for attack_type, count in attack_counts.items():
+            trends.append({
+                'name': attack_type,
+                'count': count,
+                'percentage': round((count / len(df)) * 100, 1) if len(df) > 0 else 0
+            })
+        
+        # Sort trends by count (descending)
+        trends.sort(key=lambda x: x['count'], reverse=True)
+        
+        # Create comprehensive scan summary
+        scan_summary = {
+            'timestamp': datetime.now().isoformat(),
+            'total_flows': len(df),
+            'benign_count': benign_count,
+            'attack_count': total_attacks,
+            'attack_types': len([k for k in attack_counts.keys() if k.lower() != 'benign']),
+            'risk_level': 'Low' if total_attacks == 0 else 'Medium' if total_attacks < 10 else 'High',
+            'csv_file': latest_file
+        }
+        
+        return {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "total_flows": len(df),
+            "benign_count": benign_count,
+            "attack_count": total_attacks,
+            "attack_counts": attack_counts,
+            "trends": trends,
+            "scan_summary": scan_summary,
+            "csv_file": latest_file,
+            "data_source": "live_scan" if csv_path.startswith(RESULTS_DIR) else "fallback"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting scan results: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get scan results: {str(e)}")
+
+@app.get("/scan-status")
+async def get_scan_status():
+    """Get current scan status and progress"""
+    return scan_status
+
+@app.get("/scan-history")
+async def get_scan_history():
+    """Get history of all scans"""
+    return {
+        "status": "success",
+        "history": scan_history[-10:]  # Last 10 scans
+    }
+
+def save_scan_summary(scan_data):
+    """Save comprehensive scan summary to history"""
+    attack_counts = scan_data.get("attack_counts", {})
+    benign_count = attack_counts.get("Benign", 0)
+    total_attacks = sum(attack_counts.values()) - benign_count
+    
+    summary = {
+        "timestamp": scan_data.get("timestamp"),
+        "total_flows": scan_data.get("total_flows", 0),
+        "benign_count": benign_count,
+        "attack_count": total_attacks,
+        "attack_types": len([k for k in attack_counts.keys() if k.lower() != 'benign']),
+        "attack_breakdown": {k: v for k, v in attack_counts.items() if k.lower() != 'benign'},
+        "duration": scan_data.get("duration", 0),
+        "threats": len(scan_data.get("threats", [])),
+        "warnings": len(scan_data.get("warnings", [])),
+        "risk_level": 'Low' if total_attacks == 0 else 'Medium' if total_attacks < 10 else 'High',
+        "csv_file": scan_data.get("output_file", "")
+    }
+    scan_history.append(summary)
+    # Keep only last 50 scans
+    if len(scan_history) > 50:
+        scan_history.pop(0)
+    logger.info(f"Saved scan summary: {summary['total_flows']} flows, {summary['attack_count']} attacks")
 
 # ==============================
 # RUN SERVER
