@@ -1,21 +1,23 @@
-import React, { useState } from 'react';
-import { Save, RotateCcw, Shield, Bell, Database, Network, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Bell, Database, Network, RotateCcw, Save, Shield } from 'lucide-react';
+import { useState } from 'react';
 
 export const Settings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [saved, setSaved] = useState(false);
+  const [message, setMessage] = useState('');
 
   // General Settings
-  const [generalSettings, setGeneralSettings] = useState({
+  const defaultGeneralSettings = {
     systemName: 'Network Intrusion Detection System',
     refreshInterval: 5,
     maxLogEntries: 10000,
     timezone: 'UTC',
     language: 'English'
-  });
+  };
+  const [generalSettings, setGeneralSettings] = useState(defaultGeneralSettings);
 
   // Detection Settings
-  const [detectionSettings, setDetectionSettings] = useState({
+  const defaultDetectionSettings = {
     sensitivityLevel: 'medium',
     confidenceThreshold: 75,
     autoBlockEnabled: true,
@@ -23,10 +25,11 @@ export const Settings = () => {
     enableMLModel: true,
     enableSignatureBased: true,
     enableAnomalyDetection: true
-  });
+  };
+  const [detectionSettings, setDetectionSettings] = useState(defaultDetectionSettings);
 
   // Alert Settings
-  const [alertSettings, setAlertSettings] = useState({
+  const defaultAlertSettings = {
     emailNotifications: true,
     smsNotifications: false,
     webhookEnabled: false,
@@ -34,27 +37,35 @@ export const Settings = () => {
     emailRecipients: ['admin@company.com', 'security@company.com'],
     alertCooldown: 300,
     severityThreshold: 'medium'
-  });
+  };
+  const [alertSettings, setAlertSettings] = useState(defaultAlertSettings);
 
   // Network Settings
-  const [networkSettings, setNetworkSettings] = useState({
+  const defaultNetworkSettings = {
     captureInterface: 'auto',
     packetBufferSize: 1000000,
     maxFlowTimeout: 300,
     enableIPv6: true,
     excludedNetworks: ['127.0.0.0/8', '192.168.0.0/16'],
     enablePromiscuousMode: false
-  });
+  };
+  const [networkSettings, setNetworkSettings] = useState(defaultNetworkSettings);
 
   // Database Settings
-  const [databaseSettings, setDatabaseSettings] = useState({
+  const defaultDatabaseSettings = {
     retentionPeriod: 90,
     autoCleanup: true,
     compressionEnabled: true,
     backupEnabled: true,
     backupInterval: 'daily',
     maxDatabaseSize: '10GB'
-  });
+  };
+  const [databaseSettings, setDatabaseSettings] = useState(defaultDatabaseSettings);
+
+  const toNumber = (value, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
   const tabs = [
     { id: 'general', label: 'General', icon: Shield },
@@ -66,13 +77,18 @@ export const Settings = () => {
 
   const handleSave = () => {
     setSaved(true);
+    setMessage('Settings saved successfully.');
     setTimeout(() => setSaved(false), 3000); 
   };
 
   const handleReset = () => {
-    // Reset to defaults
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setGeneralSettings(defaultGeneralSettings);
+    setDetectionSettings(defaultDetectionSettings);
+    setAlertSettings(defaultAlertSettings);
+    setNetworkSettings(defaultNetworkSettings);
+    setDatabaseSettings(defaultDatabaseSettings);
+    setSaved(false);
+    setMessage('Settings reset to defaults.');
   };
 
   const renderGeneralSettings = () => (
@@ -93,7 +109,7 @@ export const Settings = () => {
           <input
             type="number"
             value={generalSettings.refreshInterval}
-            onChange={(e) => setGeneralSettings({...generalSettings, refreshInterval: parseInt(e.target.value)})}
+            onChange={(e) => setGeneralSettings({...generalSettings, refreshInterval: toNumber(e.target.value, 5)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -103,7 +119,7 @@ export const Settings = () => {
           <input
             type="number"
             value={generalSettings.maxLogEntries}
-            onChange={(e) => setGeneralSettings({...generalSettings, maxLogEntries: parseInt(e.target.value)})}
+            onChange={(e) => setGeneralSettings({...generalSettings, maxLogEntries: toNumber(e.target.value, 10000)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -149,7 +165,7 @@ export const Settings = () => {
             min="0"
             max="100"
             value={detectionSettings.confidenceThreshold}
-            onChange={(e) => setDetectionSettings({...detectionSettings, confidenceThreshold: parseInt(e.target.value)})}
+            onChange={(e) => setDetectionSettings({...detectionSettings, confidenceThreshold: toNumber(e.target.value, 75)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -159,7 +175,7 @@ export const Settings = () => {
           <input
             type="number"
             value={detectionSettings.blockDuration}
-            onChange={(e) => setDetectionSettings({...detectionSettings, blockDuration: parseInt(e.target.value)})}
+            onChange={(e) => setDetectionSettings({...detectionSettings, blockDuration: toNumber(e.target.value, 3600)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -264,7 +280,7 @@ export const Settings = () => {
           <input
             type="number"
             value={alertSettings.alertCooldown}
-            onChange={(e) => setAlertSettings({...alertSettings, alertCooldown: parseInt(e.target.value)})}
+            onChange={(e) => setAlertSettings({...alertSettings, alertCooldown: toNumber(e.target.value, 300)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -319,7 +335,7 @@ export const Settings = () => {
           <input
             type="number"
             value={networkSettings.packetBufferSize}
-            onChange={(e) => setNetworkSettings({...networkSettings, packetBufferSize: parseInt(e.target.value)})}
+            onChange={(e) => setNetworkSettings({...networkSettings, packetBufferSize: toNumber(e.target.value, 1000000)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -329,7 +345,7 @@ export const Settings = () => {
           <input
             type="number"
             value={networkSettings.maxFlowTimeout}
-            onChange={(e) => setNetworkSettings({...networkSettings, maxFlowTimeout: parseInt(e.target.value)})}
+            onChange={(e) => setNetworkSettings({...networkSettings, maxFlowTimeout: toNumber(e.target.value, 300)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -380,7 +396,7 @@ export const Settings = () => {
           <input
             type="number"
             value={databaseSettings.retentionPeriod}
-            onChange={(e) => setDatabaseSettings({...databaseSettings, retentionPeriod: parseInt(e.target.value)})}
+            onChange={(e) => setDatabaseSettings({...databaseSettings, retentionPeriod: toNumber(e.target.value, 90)})}
             className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
           />
         </div>
@@ -471,25 +487,30 @@ export const Settings = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+      <div className="panel p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">System Settings</h2>
+          <h2 className="text-2xl font-semibold text-slate-100">System Settings</h2>
           <div className="flex items-center space-x-3">
             {saved && (
-              <span className="px-4 py-2 bg-green-600 text-white rounded-lg">
-                Settings saved successfully!
+              <span className="rounded-lg border border-green-500/35 bg-green-500/15 px-4 py-2 text-green-200">
+                {message}
+              </span>
+            )}
+            {!saved && message && (
+              <span className="rounded-lg border border-slate-600 bg-slate-800/80 px-4 py-2 text-slate-200">
+                {message}
               </span>
             )}
             <button
               onClick={handleReset}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center space-x-2"
+              className="flex items-center space-x-2 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-slate-200 hover:bg-slate-700"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Reset to Defaults</span>
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center space-x-2"
+              className="flex items-center space-x-2 rounded-lg border border-cyan-400/35 bg-cyan-500/12 px-4 py-2 text-cyan-100 hover:bg-cyan-500/25"
             >
               <Save className="w-4 h-4" />
               <span>Save Settings</span>
@@ -499,9 +520,9 @@ export const Settings = () => {
       </div>
 
       {/* Settings Content */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700">
+      <div className="panel">
         {/* Tab Navigation */}
-        <div className="border-b border-gray-700">
+        <div className="border-b border-slate-700">
           <nav className="flex space-x-1 p-4">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -511,8 +532,8 @@ export const Settings = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
                     activeTab === tab.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                      ? 'border border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
                   }`}
                 >
                   <Icon className="w-4 h-4" />

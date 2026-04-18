@@ -1,102 +1,124 @@
-import React, { useState } from 'react';
-import { ScanButton } from './Dashboard/ScanButton';
-import { ScanResults } from './Dashboard/ScanResults';
+import { useEffect, useRef, useState } from 'react';
+import API_ENDPOINTS from '../config/api';
 import { AttackTrends } from './Dashboard/AttackTrends';
 import { EventHistory } from './Dashboard/EventHistory';
-import { ConnectionTest } from './ConnectionTest';
-import API_ENDPOINTS from '../config/api';
+import { ScanButton } from './Dashboard/ScanButton';
+import { ScanResults } from './Dashboard/ScanResults';
 
 export const Dashboard = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResults, setScanResults] = useState(null);
   const [attackTrends, setAttackTrends] = useState(null);
   const [eventHistory, setEventHistory] = useState([]);
+  const [isLoadingResults, setIsLoadingResults] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState(null);
   const [scanDuration, setScanDuration] = useState(60);
   const [scanProgress, setScanProgress] = useState({ status: 'idle', progress: 0, message: '' });
+  const pollIntervalRef = useRef(null);
+  const pollTimeoutRef = useRef(null);
+
+  const clearPolling = () => {
+    if (pollIntervalRef.current) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (pollTimeoutRef.current) {
+      window.clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  };
+
+  const parseErrorMessage = async (response, fallbackMessage) => {
+    try {
+      const payload = await response.json();
+      return payload?.detail || payload?.message || fallbackMessage;
+    } catch (parseError) {
+      return fallbackMessage;
+    }
+  };
 
   // Poll scan status during scanning
   const pollScanStatus = async () => {
     try {
       const response = await fetch(API_ENDPOINTS.scanStatus);
+      if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Unable to retrieve scan status'));
+      }
       const status = await response.json();
-      setScanProgress(prev => ({ ...prev, ...status }));
+      const statusPayload = status?.data || status;
+      setScanProgress(prev => ({ ...prev, ...statusPayload }));
       
       // When scan completes, fetch results automatically and clean up
-      if (status.status === 'completed') {
+      if (statusPayload.status === 'completed') {
         fetchScanResults();
-        fetchScanHistory(); // Refresh history
+        fetchScanHistory();
         setIsScanning(false);
-        
-        // Clean up intervals
-        if (scanProgress.intervalId) {
-          clearInterval(scanProgress.intervalId);
-        }
-        if (scanProgress.timeoutId) {
-          clearTimeout(scanProgress.timeoutId);
-        }
-        
+        clearPolling();
         setScanProgress({ status: 'idle', progress: 0, message: '' });
-      } else if (status.status === 'error') {
+      } else if (statusPayload.status === 'error') {
         setIsScanning(false);
-        
-        // Clean up intervals
-        if (scanProgress.intervalId) {
-          clearInterval(scanProgress.intervalId);
-        }
-        if (scanProgress.timeoutId) {
-          clearTimeout(scanProgress.timeoutId);
-        }
-        
-        setScanProgress({ status: 'error', progress: 0, message: status.message || 'Scan failed' });
+        clearPolling();
+        setScanProgress({ status: 'error', progress: 0, message: statusPayload.message || 'Scan failed' });
       }
     } catch (err) {
-      console.error('Error polling scan status:', err);
+      setIsScanning(false);
+      clearPolling();
+      setError(err.message || 'Error polling scan status');
+      setScanProgress({ status: 'error', progress: 0, message: 'Scan status unavailable' });
     }
   };
 
   // Fetch scan results and trends
   const fetchScanResults = async () => {
     try {
+      setIsLoadingResults(true);
       const response = await fetch(API_ENDPOINTS.scanResults);
+      if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to load scan results'));
+      }
       const data = await response.json();
+      const payload = data?.data || data;
       
-      if (data.status === 'success') {
+      if (payload.status === 'success' || payload.total_flows !== undefined) {
         // Update attack trends for chart (Recharts format)
-        setAttackTrends(data.trends || []);
+        setAttackTrends(payload.trends || []);
         
         // Update scan results with comprehensive data
         setScanResults({
-          total_flows: data.total_flows || 0,
-          benign_count: data.benign_count || 0,
-          attack_count: data.attack_count || 0,
-          trends: data.trends || []
-        });
-        
-        console.log('Scan results loaded:', {
-          total_flows: data.total_flows,
-          benign_count: data.benign_count,
-          attack_count: data.attack_count,
-          trends: data.trends?.length
+          total_flows: payload.total_flows || 0,
+          benign_count: payload.benign_count || 0,
+          attack_count: payload.attack_count || 0,
+          trends: payload.trends || []
         });
       } else {
-        console.log('No scan results available yet');
+        setScanResults(null);
+        setAttackTrends([]);
       }
     } catch (err) {
-      console.error('Error fetching scan results:', err);
+      setError(err.message || 'Unable to load scan results');
+      setScanResults(null);
+    } finally {
+      setIsLoadingResults(false);
     }
   };
 
   // Fetch scan history
   const fetchScanHistory = async () => {
     try {
+      setIsLoadingHistory(true);
       const response = await fetch(API_ENDPOINTS.scanHistory);
-      const data = await response.json();
-      if (data.status === 'success') {
-        setEventHistory(data.history || []);
+      if (!response.ok) {
+        throw new Error(await parseErrorMessage(response, 'Failed to load scan history'));
       }
+      const data = await response.json();
+      const payload = data?.data || data;
+      setEventHistory(payload.history || []);
     } catch (err) {
-      console.error('Error fetching scan history:', err);
+      setError(err.message || 'Unable to load scan history');
+      setEventHistory([]);
+    } finally {
+      setIsLoadingHistory(false);
     }
   };
 
@@ -106,8 +128,6 @@ export const Dashboard = () => {
     setScanProgress({ status: 'starting', progress: 0, message: 'Initializing scan...' });
     
     try {
-      console.log('Starting scan with duration:', scanDuration);
-      
       // Call the real backend live scan API
       const response = await fetch(`${API_ENDPOINTS.liveScan}?duration=${scanDuration}`, {
         method: 'POST',
@@ -117,60 +137,57 @@ export const Dashboard = () => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Scan failed');
+        throw new Error(await parseErrorMessage(response, 'Scan failed'));
       }
       
-      const data = await response.json();
-      console.log('Scan initiated:', data);
+      await response.json();
       
       // Start continuous polling for progress updates
-      const progressInterval = setInterval(() => {
+      clearPolling();
+      pollIntervalRef.current = window.setInterval(() => {
         pollScanStatus();
       }, 2000); // Poll every 2 seconds
       
       // Set a maximum timeout to prevent infinite polling
-      const maxTimeout = setTimeout(() => {
-        clearInterval(progressInterval);
+      pollTimeoutRef.current = window.setTimeout(() => {
+        clearPolling();
         setIsScanning(false);
         setScanProgress({ status: 'idle', progress: 0, message: '' });
-        console.log('Scan polling timeout reached');
+        setError('Scan timed out. Please try a shorter duration.');
       }, (scanDuration + 60) * 1000); // Extra 60 seconds for processing
       
-      // Store interval refs for cleanup
-      setScanProgress(prev => ({ ...prev, intervalId: progressInterval, timeoutId: maxTimeout }));
-      
-    } catch (error) {
-      console.error('Scan error:', error);
-      setError(error.message);
+    } catch (scanError) {
+      setError(scanError.message || 'Scan failed');
       setIsScanning(false);
-      setScanProgress({ status: 'error', progress: 0, message: error.message });
-      
-      // Fallback dummy data for demo
-      setScanResults({
-        total_flows: 20,
-        benign_count: 15,
-        attack_count: 5,
-        trends: [
-          { name: 'Benign', count: 15, percentage: 75.0 },
-          { name: 'PortScan', count: 3, percentage: 15.0 },
-          { name: 'DDoS', count: 2, percentage: 10.0 }
-        ]
-      });
+      clearPolling();
+      setScanProgress({ status: 'error', progress: 0, message: scanError.message || 'Scan failed' });
     }
   };
 
   // Load initial data
-  React.useEffect(() => {
+  useEffect(() => {
     fetchScanResults();
     fetchScanHistory();
+    return () => {
+      clearPolling();
+    };
   }, []);
 
+  const onDurationChange = (value) => {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      setScanDuration(60);
+      return;
+    }
+    const safe = Math.max(10, Math.min(300, Math.floor(numeric)));
+    setScanDuration(safe);
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Scan Duration Control */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+      <div className="panel p-4 md:p-5">
+        <label className="mb-2 block text-sm font-medium text-slate-300">
           Capture Duration (seconds)
         </label>
         <input
@@ -178,18 +195,18 @@ export const Dashboard = () => {
           min="10"
           max="300"
           value={scanDuration}
-          onChange={(e) => setScanDuration(parseInt(e.target.value))}
+          onChange={(e) => onDurationChange(e.target.value)}
           disabled={isScanning}
-          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 focus:border-cyan-400 focus:outline-none"
         />
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-slate-400">
           Recommended: 60 seconds for comprehensive analysis
         </p>
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 text-red-200">
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-red-200">
           <strong>Error:</strong> {error}
         </div>
       )}
@@ -283,13 +300,13 @@ export const Dashboard = () => {
       <ScanButton onScanStart={handleScanStart} isScanning={isScanning} />
       
       {/* Scan Results */}
-      <ScanResults results={scanResults} />
+      <ScanResults results={scanResults} loading={isLoadingResults} />
       
       {/* Attack Trends */}
-      <AttackTrends trends={attackTrends} />
+      <AttackTrends trends={attackTrends} loading={isLoadingResults} />
       
       {/* Event History */}
-      <EventHistory events={eventHistory} />
+      <EventHistory events={eventHistory} loading={isLoadingHistory} />
     </div>
   );
 };

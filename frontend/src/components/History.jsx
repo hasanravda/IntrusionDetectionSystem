@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, Search, Download, Clock, AlertTriangle, Shield } from 'lucide-react';
+import { Calendar, Download, Search } from 'lucide-react';
+import { useState } from 'react';
 
 export const History = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,6 +42,10 @@ export const History = () => {
     event.destination.includes(searchTerm)
   );
 
+  const avgConfidence = filteredData.length
+    ? Math.round(filteredData.reduce((sum, event) => sum + event.confidence, 0) / filteredData.length)
+    : 0;
+
   const handleExport = () => {
     // Simple export functionality
     const csv = [
@@ -69,13 +73,13 @@ export const History = () => {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4">
-        <h2 className="text-xl font-bold text-white mb-2">Event History</h2>
-        <p className="text-gray-400">Historical security events and attack logs</p>
+      <div className="panel p-4">
+        <h2 className="mb-2 text-xl font-semibold text-slate-100">Event History</h2>
+        <p className="text-sm text-slate-400">Historical security events and attack logs</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4">
+      <div className="panel p-4">
         <div className="flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="flex-1 min-w-64">
@@ -86,7 +90,7 @@ export const History = () => {
                 placeholder="Search events..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 pl-10 pr-4 text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
               />
             </div>
           </div>
@@ -97,7 +101,7 @@ export const History = () => {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-500"
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 focus:border-cyan-400 focus:outline-none"
             >
               <option value="24h">Last 24 Hours</option>
               <option value="7d">Last 7 Days</option>
@@ -108,7 +112,7 @@ export const History = () => {
           {/* Export Button */}
           <button
             onClick={handleExport}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+            className="flex items-center space-x-2 rounded-lg border border-cyan-400/35 bg-cyan-500/12 px-4 py-2 text-cyan-100 transition-colors hover:bg-cyan-500/25"
           >
             <Download className="w-4 h-4" />
             <span>Export CSV</span>
@@ -117,37 +121,35 @@ export const History = () => {
       </div>
 
       {/* Statistics Summary */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4">
-        <h3 className="text-lg font-bold text-white mb-4">Summary Statistics</h3>
+      <div className="panel p-4">
+        <h3 className="mb-4 text-lg font-semibold text-slate-100">Summary Statistics</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-white">{filteredData.length}</p>
-            <p className="text-gray-400 text-sm">Total Events</p>
+            <p className="text-2xl font-bold text-slate-100">{filteredData.length}</p>
+            <p className="text-sm text-slate-400">Total Events</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-red-400">
               {filteredData.filter(e => e.severity === 'High' || e.severity === 'Critical').length}
             </p>
-            <p className="text-gray-400 text-sm">High Severity</p>
+            <p className="text-sm text-slate-400">High Severity</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-green-400">
               {filteredData.filter(e => e.status === 'Blocked').length}
             </p>
-            <p className="text-gray-400 text-sm">Blocked</p>
+            <p className="text-sm text-slate-400">Blocked</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-blue-400">
-              {Math.round(filteredData.reduce((sum, e) => sum + e.confidence, 0) / filteredData.length)}%
-            </p>
-            <p className="text-gray-400 text-sm">Avg Confidence</p>
+            <p className="text-2xl font-bold text-cyan-300">{avgConfidence}%</p>
+            <p className="text-sm text-slate-400">Avg Confidence</p>
           </div>
         </div>
       </div>
 
       {/* Events Table */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4">
-        <h3 className="text-lg font-bold text-white mb-4">Security Events</h3>
+      <div className="panel p-4">
+        <h3 className="mb-4 text-lg font-semibold text-slate-100">Security Events</h3>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -181,6 +183,13 @@ export const History = () => {
                   <td className="py-3 px-4 text-gray-300 text-sm">{event.confidence}%</td>
                 </tr>
               ))}
+              {filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">
+                    No events match your current filters.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

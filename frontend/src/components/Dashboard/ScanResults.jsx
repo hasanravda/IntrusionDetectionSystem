@@ -1,5 +1,5 @@
-import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CustomChartTooltip } from './CustomChartTooltip';
 
 const getColor = (name) => {
   const n = (name || '').toLowerCase();
@@ -11,12 +11,22 @@ const getColor = (name) => {
   return '#3B82F6';
 };
 
-export const ScanResults = ({ results }) => {
+export const ScanResults = ({ results, loading = false }) => {
+
+  if (loading) {
+    return (
+      <div className="panel p-6">
+        <h3 className="mb-2 text-lg font-semibold text-slate-100">Scan Results</h3>
+        <p className="text-sm text-slate-400">Loading latest scan results...</p>
+      </div>
+    );
+  }
+
   if (!results) {
     return (
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6">
-        <h3 className="text-lg font-bold text-white mb-2">Scan Results</h3>
-        <p className="text-gray-400">No scan results yet. Click "Start Security Scan" to begin.</p>
+      <div className="panel p-6">
+        <h3 className="mb-2 text-lg font-semibold text-slate-100">Scan Results</h3>
+        <p className="text-sm text-slate-400">No scan results yet. Click Start Security Scan to begin.</p>
       </div>
     );
   }
@@ -25,25 +35,22 @@ export const ScanResults = ({ results }) => {
   const benignPct = total_flows > 0 ? ((benign_count / total_flows) * 100).toFixed(1) : '0.0';
   const attackPct = total_flows > 0 ? ((attack_count / total_flows) * 100).toFixed(1) : '0.0';
 
-  // Only show attack types (exclude benign) for the breakdown
-  const attackBreakdown = trends.filter(t => t.name.toLowerCase() !== 'benign');
-
   return (
-    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6">
-      <h3 className="text-lg font-bold text-white mb-4">Scan Results</h3>
+    <div className="panel p-6">
+      <h3 className="mb-4 text-lg font-semibold text-slate-100">Scan Results</h3>
 
       <div className="space-y-5">
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-center">
+          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-4 text-center">
             <div className="text-2xl font-bold text-blue-400">{total_flows.toLocaleString()}</div>
             <div className="text-xs text-gray-400 mt-1">Total Flows</div>
           </div>
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+          <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-center">
             <div className="text-2xl font-bold text-green-400">{benign_count.toLocaleString()}</div>
             <div className="text-xs text-gray-400 mt-1">Benign ({benignPct}%)</div>
           </div>
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center">
             <div className="text-2xl font-bold text-red-400">{attack_count.toLocaleString()}</div>
             <div className="text-xs text-gray-400 mt-1">Attacks ({attackPct}%)</div>
           </div>
@@ -67,11 +74,19 @@ export const ScanResults = ({ results }) => {
                   />
                   <YAxis stroke="#9CA3AF" tick={{ fontSize: 11 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#F3F4F6' }}
-                    formatter={(value) => [value.toLocaleString(), 'Flows']}
+                    content={<CustomChartTooltip valueLabel="flows" />}
+                    cursor={{ fill: 'rgba(34, 211, 238, 0.08)' }}
+                    offset={10}
+                    allowEscapeViewBox={{ x: false, y: true }}
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
+                    isAnimationActive={false}
+                    position={undefined}
                   />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  <Bar
+                    dataKey="count"
+                    radius={[6, 6, 0, 0]}
+                    activeBar={{ fillOpacity: 0.95, stroke: '#67e8f9', strokeOpacity: 0.35, strokeWidth: 1 }}
+                  >
                     {trends.map((entry, i) => (
                       <Cell key={i} fill={getColor(entry.name)} />
                     ))}

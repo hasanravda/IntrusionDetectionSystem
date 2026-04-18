@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
-import { Play, Shield, AlertTriangle } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 export const ScanButton = ({ onScanStart, isScanning }) => {
   return (
-    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-6">
+    <div className="panel p-6">
       <div className="text-center">
-        <h3 className="text-xl font-bold text-white mb-4">Network Security Scan</h3>
-        <p className="text-gray-400 mb-6">
+        <h3 className="mb-3 text-xl font-semibold text-slate-100">Network Security Scan</h3>
+        <p className="mb-6 text-sm text-slate-400">
           Click the button below to start scanning your network for potential threats
         </p>
         
@@ -15,8 +14,8 @@ export const ScanButton = ({ onScanStart, isScanning }) => {
           disabled={isScanning}
           className={`px-8 py-4 rounded-lg font-semibold transition-all ${
             isScanning 
-              ? 'bg-gray-500 text-gray-300 cursor-not-allowed' 
-              : 'bg-blue-500 hover:bg-blue-600 text-white hover:scale-105'
+              ? 'cursor-not-allowed border border-slate-700 bg-slate-800 text-slate-400' 
+              : 'border border-cyan-400/40 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25'
           }`}
         >
           {isScanning ? (

@@ -2,7 +2,7 @@
 FastAPI Backend for Network Intrusion Detection System (NIDS)
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -221,6 +221,30 @@ def run_inference(df_ml: pd.DataFrame) -> List[str]:
     return final_labels
 
 
+def api_success(data: Optional[Dict] = None, message: str = "success") -> Dict:
+    """Standard success response envelope."""
+    return {
+        "status": "success",
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+        "data": data or {}
+    }
+
+
+def api_error(message: str, code: str = "internal_error", status: int = 500) -> JSONResponse:
+    """Standard error response envelope."""
+    return JSONResponse(
+        status_code=status,
+        content={
+            "status": "error",
+            "code": code,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+            "data": {}
+        }
+    )
+
+
 # ==============================
 # STARTUP EVENT
 # ==============================
@@ -231,6 +255,17 @@ async def startup_event():
     success = load_model_and_encoder()
     if not success:
         logger.warning("Failed to load model on startup. Some endpoints may not work.")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return api_error(str(exc.detail), code="http_error", status=exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server error: {str(exc)}", exc_info=True)
+    return api_error("Internal server error", code="internal_error", status=500)
 
 
 # ==============================
@@ -459,7 +494,7 @@ async def get_statistics():
 
 
 @app.post("/scan/live", tags=["Live Capture"])
-async def live_network_scan(duration: int = 60):
+async def live_network_scan(duration: int = Query(60, ge=10, le=300)):
     """
     Capture live network traffic and analyze for intrusions
     
@@ -646,7 +681,12 @@ async def live_network_scan(duration: int = 60):
         logger.info(f"Scan completed: {len(flows)} flows analyzed")
         return response
         
-    except HTTPException:
+    except HTTPException as exc:
+        scan_status = {
+            "status": "error",
+            "progress": 0,
+            "message": str(exc.detail)
+        }
         raise
     except Exception as e:
         logger.error(f"Live scan error: {str(e)}", exc_info=True)
@@ -668,18 +708,23 @@ class ConnectionManager:
         logger.info(f"WebSocket client connected. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        logger.info(f"WebSocket client disconnected. Total: {len(self.active_connections)}")
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"WebSocket client disconnected. Total: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
 
     async def broadcast(self, message: str):
+        stale_connections = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
-                pass
+            except Exception:
+                stale_connections.append(connection)
+
+        for stale in stale_connections:
+            self.disconnect(stale)
 
 manager = ConnectionManager()
 
@@ -762,11 +807,10 @@ async def stop_continuous_monitoring():
 @app.get("/monitoring/status")
 async def get_monitoring_status():
     """Get continuous monitoring status"""
-    return {
-        "status": "success",
+    return api_success({
         "monitoring_active": continuous_monitoring["active"],
         "scan_status": scan_status
-    }
+    })
 
 async def background_monitoring():
     """Background task for continuous monitoring"""
@@ -876,7 +920,7 @@ async def get_scan_results():
                     continue
 
         if not csv_candidates:
-            return {
+            return api_success({
                 "status": "no_data",
                 "message": "No scan results available yet. Start a scan to generate data.",
                 "total_flows": 0,
@@ -885,7 +929,7 @@ async def get_scan_results():
                 "attack_counts": {},
                 "trends": [],
                 "scan_summary": {}
-            }
+            }, message="No scan results available yet")
 
         csv_path, _, latest_file = max(csv_candidates, key=lambda x: x[1])
         
@@ -931,7 +975,7 @@ async def get_scan_results():
             'csv_file': latest_file
         }
         
-        return {
+        return api_success({
             "status": "success",
             "timestamp": datetime.now().isoformat(),
             "total_flows": len(df),
@@ -942,7 +986,7 @@ async def get_scan_results():
             "scan_summary": scan_summary,
             "csv_file": latest_file,
             "data_source": "live_scan" if csv_path.startswith(RESULTS_DIR) else "fallback"
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error getting scan results: {str(e)}")
@@ -951,15 +995,14 @@ async def get_scan_results():
 @app.get("/scan-status")
 async def get_scan_status():
     """Get current scan status and progress"""
-    return scan_status
+    return api_success(scan_status)
 
 @app.get("/scan-history")
 async def get_scan_history():
     """Get history of all scans"""
-    return {
-        "status": "success",
+    return api_success({
         "history": scan_history[-10:]  # Last 10 scans
-    }
+    })
 
 def save_scan_summary(scan_data):
     """Save comprehensive scan summary to history"""
