@@ -48,6 +48,7 @@ app.add_middleware(
 # ==============================
 MODEL_PATH = "model/nids_xgb_multiclass.pkl"
 ENCODER_PATH = "model/attack_label_encoder.pkl"
+
 UPLOAD_DIR = "uploads"
 RESULTS_DIR = "results"
 CONFIDENCE_THRESHOLD = float(os.getenv("NIDS_CONFIDENCE_THRESHOLD", "0.60"))
@@ -996,6 +997,144 @@ async def get_scan_results():
 async def get_scan_status():
     """Get current scan status and progress"""
     return api_success(scan_status)
+
+@app.get("/attack-statistics")
+async def get_attack_statistics():
+    """Get comprehensive attack statistics across all scans"""
+    try:
+        # Get all CSV files in results directory
+        results_files = [f for f in os.listdir(RESULTS_DIR) if f.endswith('.csv')]
+        if not results_files:
+            return {
+                "status": "no_data",
+                "message": "No scan results available",
+                "total_scans": 0,
+                "total_flows": 0,
+                "attack_statistics": {},
+                "attack_categories": []
+            }
+        
+        # Aggregate statistics across all scans
+        total_flows = 0
+        total_attacks = 0
+        attack_counts = {}
+        scan_details = []
+        
+        for csv_file in results_files:
+            try:
+                csv_path = os.path.join(RESULTS_DIR, csv_file)
+                df = pd.read_csv(csv_path)
+                
+                # Get file timestamp (from filename or file modification time)
+                file_time = datetime.fromtimestamp(os.path.getmtime(csv_path))
+                
+                # Count attacks in this scan
+                scan_attack_counts = {}
+                if 'prediction' in df.columns:
+                    scan_attack_counts = df['prediction'].value_counts().to_dict()
+                
+                # Update global counts
+                scan_flows = len(df)
+                total_flows += scan_flows
+                
+                for attack_type, count in scan_attack_counts.items():
+                    attack_counts[attack_type] = attack_counts.get(attack_type, 0) + count
+                    if attack_type.lower() != 'benign':
+                        total_attacks += count
+                
+                # Store scan details
+                benign_count = scan_attack_counts.get('Benign', 0)
+                scan_total_attacks = sum(scan_attack_counts.values()) - benign_count
+                
+                scan_details.append({
+                    'filename': csv_file,
+                    'timestamp': file_time.isoformat(),
+                    'total_flows': scan_flows,
+                    'benign_count': benign_count,
+                    'attack_count': scan_total_attacks,
+                    'attack_types': list(scan_attack_counts.keys()),
+                    'attack_breakdown': {k: v for k, v in scan_attack_counts.items() if k.lower() != 'benign'}
+                })
+                
+            except Exception as e:
+                logger.warning(f"Error processing {csv_file}: {str(e)}")
+                continue
+        
+        # Format attack statistics for display
+        attack_statistics = {}
+        for attack_type, count in attack_counts.items():
+            percentage = round((count / total_flows) * 100, 2) if total_flows > 0 else 0
+            attack_statistics[attack_type] = {
+                'count': count,
+                'percentage': percentage,
+                'severity': get_attack_severity(attack_type)
+            }
+        
+        # Sort attacks by count (descending)
+        sorted_attacks = sorted(attack_statistics.items(), key=lambda x: x[1]['count'], reverse=True)
+        
+        return {
+            "status": "success",
+            "summary": {
+                "total_scans": len(results_files),
+                "total_flows": total_flows,
+                "total_attacks": total_attacks,
+                "benign_flows": attack_counts.get('Benign', 0),
+                "unique_attack_types": len([k for k in attack_counts.keys() if k.lower() != 'benign'])
+            },
+            "attack_statistics": dict(sorted_attacks),
+            "attack_categories": [
+                {
+                    "name": attack_type,
+                    "count": stats['count'],
+                    "percentage": stats['percentage'],
+                    "severity": stats['severity'],
+                    "color": get_attack_color(attack_type)
+                }
+                for attack_type, stats in sorted_attacks
+            ],
+            "recent_scans": sorted(scan_details, key=lambda x: x['timestamp'], reverse=True)[:10]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting attack statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get attack statistics: {str(e)}")
+
+def get_attack_severity(attack_type):
+    """Determine severity level for attack type"""
+    attack_type_lower = attack_type.lower()
+    if attack_type_lower == 'benign':
+        return 'safe'
+    elif any(x in attack_type_lower for x in ['ddos', 'dos', 'exploit', 'ransomware']):
+        return 'critical'
+    elif any(x in attack_type_lower for x in ['scan', 'fuzzers', 'backdoor']):
+        return 'high'
+    elif any(x in attack_type_lower for x in ['worm', 'shellcode', 'analysis']):
+        return 'medium'
+    else:
+        return 'low'
+
+def get_attack_color(attack_type):
+    """Get color for attack type visualization"""
+    attack_type_lower = attack_type.lower()
+    if attack_type_lower == 'benign':
+        return '#10B981'  # Green
+    elif any(x in attack_type_lower for x in ['ddos', 'dos']):
+        return '#EF4444'  # Red
+    elif any(x in attack_type_lower for x in ['scan']):
+        return '#F59E0B'  # Orange
+    elif any(x in attack_type_lower for x in ['exploit']):
+        return '#DC2626'  # Dark Red
+    elif any(x in attack_type_lower for x in ['backdoor']):
+        return '#A855F7'  # Purple
+    elif any(x in attack_type_lower for x in ['fuzzers']):
+        return '#F97316'  # Orange-Red
+    elif any(x in attack_type_lower for x in ['worm']):
+        return '#EC4899'  # Pink
+    elif any(x in attack_type_lower for x in ['shellcode']):
+        return '#8B5CF6'  # Violet
+    else:
+        return '#3B82F6'  # Blue
 
 @app.get("/scan-history")
 async def get_scan_history():

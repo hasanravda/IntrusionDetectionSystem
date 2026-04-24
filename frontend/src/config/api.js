@@ -27,11 +27,8 @@ export const API_ENDPOINTS = {
   monitoringStatus: `${API_BASE_URL}/monitoring/status`,
   websocket: `${API_BASE_URL.replace('http', 'ws')}/ws`,
   
-  // Files
-  download: (filename) => `${API_BASE_URL}/download/${filename}`,
-  results: `${API_BASE_URL}/results`,
-  
   // Statistics
+  attackStatistics: `${API_BASE_URL}/attack-statistics`,
   stats: `${API_BASE_URL}/stats`,
 };
 

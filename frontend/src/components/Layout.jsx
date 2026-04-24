@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Bell, Circle, History, Menu, Search, Settings, Shield, X } from 'lucide-react';
+import { Activity, BarChart3, Bell, Circle, GitBranch, History, Menu, Search, Shield, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import API_ENDPOINTS from '../config/api';
@@ -14,7 +14,7 @@ export const Layout = () => {
     // { id: 'alerts', label: 'Security Alerts', icon: AlertTriangle, color: 'from-red-500 to-red-600', path: '/alerts' },
     // { id: 'analysis', label: 'Threat Analysis', icon: Shield, color: 'from-purple-500 to-purple-600', path: '/analysis' },
     { id: 'history', label: 'Event History', icon: History, color: 'from-orange-500 to-orange-600', path: '/history' },
-    { id: 'settings', label: 'Settings', icon: Settings, color: 'from-gray-500 to-gray-600', path: '/settings' },
+    { id: 'how-it-works', label: 'How It Works', icon: GitBranch, color: 'from-cyan-500 to-sky-600', path: '/how-it-works' },
   ];
 
   const isActive = (path) => {
@@ -157,7 +157,7 @@ export const Layout = () => {
                       {item.id === 'alerts' && 'Security Events'}
                       {item.id === 'analysis' && 'Threat Intelligence'}
                       {item.id === 'history' && 'Historical Data'}
-                      {item.id === 'settings' && 'Configuration'}
+                      {item.id === 'how-it-works' && 'Pipeline Blueprint'}
                     </p>
                   </div>
                 </Link>

@@ -1,11 +1,11 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { Dashboard } from './components/Dashboard';
-import { LiveMonitor } from './components/Dashboard/LiveMonitor';
 import { Alerts } from './components/Alerts';
 import { Analysis } from './components/Analysis';
+import { Dashboard } from './components/Dashboard';
+import { LiveMonitor } from './components/Dashboard/LiveMonitor';
 import { History } from './components/History';
-import { Settings } from './components/Settings';
+import { HowItWorks } from './components/HowItWorks';
+import { Layout } from './components/Layout';
 
 const router = createBrowserRouter([
   {
@@ -37,8 +37,8 @@ const router = createBrowserRouter([
         element: <History />,
       },
       {
-        path: 'settings',
-        element: <Settings />,
+        path: 'how-it-works',
+        element: <HowItWorks />,
       },
     ],
   },

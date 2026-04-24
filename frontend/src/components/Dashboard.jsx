@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import API_ENDPOINTS from '../config/api';
-import { AttackTrends } from './Dashboard/AttackTrends';
 import { EventHistory } from './Dashboard/EventHistory';
 import { ScanButton } from './Dashboard/ScanButton';
 import { ScanResults } from './Dashboard/ScanResults';
@@ -301,9 +300,6 @@ export const Dashboard = () => {
       
       {/* Scan Results */}
       <ScanResults results={scanResults} loading={isLoadingResults} />
-      
-      {/* Attack Trends */}
-      <AttackTrends trends={attackTrends} loading={isLoadingResults} />
       
       {/* Event History */}
       <EventHistory events={eventHistory} loading={isLoadingHistory} />
