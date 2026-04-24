@@ -27,6 +27,11 @@ export const API_ENDPOINTS = {
   monitoringStatus: `${API_BASE_URL}/monitoring/status`,
   websocket: `${API_BASE_URL.replace('http', 'ws')}/ws`,
   
+  // Packet Monitor
+  startPacketMonitor: `${API_BASE_URL}/packet-monitor/start`,
+  stopPacketMonitor: `${API_BASE_URL}/packet-monitor/stop`,
+  packetMonitorStatus: `${API_BASE_URL}/packet-monitor/status`,
+  
   // Statistics
   attackStatistics: `${API_BASE_URL}/attack-statistics`,
   stats: `${API_BASE_URL}/stats`,

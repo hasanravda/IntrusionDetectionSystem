@@ -11,8 +11,7 @@ export const Layout = () => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, color: 'from-blue-500 to-blue-600', path: '/dashboard' },
     { id: 'monitoring', label: 'Live Monitor', icon: Activity, color: 'from-green-500 to-green-600', path: '/monitoring' },
-    // { id: 'alerts', label: 'Security Alerts', icon: AlertTriangle, color: 'from-red-500 to-red-600', path: '/alerts' },
-    // { id: 'analysis', label: 'Threat Analysis', icon: Shield, color: 'from-purple-500 to-purple-600', path: '/analysis' },
+    { id: 'packets', label: 'Packet Monitor', icon: Search, color: 'from-purple-500 to-purple-600', path: '/packets' },
     { id: 'history', label: 'Event History', icon: History, color: 'from-orange-500 to-orange-600', path: '/history' },
     { id: 'how-it-works', label: 'How It Works', icon: GitBranch, color: 'from-cyan-500 to-sky-600', path: '/how-it-works' },
   ];
@@ -154,8 +153,7 @@ export const Layout = () => {
                     <p className="text-xs opacity-70 text-slate-400">
                       {item.id === 'dashboard' && 'System Overview'}
                       {item.id === 'monitoring' && 'Real-time Detection'}
-                      {item.id === 'alerts' && 'Security Events'}
-                      {item.id === 'analysis' && 'Threat Intelligence'}
+                      {item.id === 'packets' && 'Live Packet Capture'}
                       {item.id === 'history' && 'Historical Data'}
                       {item.id === 'how-it-works' && 'Pipeline Blueprint'}
                     </p>

@@ -210,87 +210,96 @@ export const Dashboard = () => {
         </div>
       )}
 
-      {/* Scan Progress */}
+      {/* Simplified Scan Progress */}
       {isScanning && scanProgress.status !== 'idle' && (
-        <div className={`rounded-lg p-4 border ${
-          scanProgress.status === 'error' ? 'bg-red-900/50 border-red-500' :
-          scanProgress.status === 'completed' ? 'bg-green-900/50 border-green-500' :
-          'bg-blue-900/50 border-blue-500'
+        <div className={`rounded-xl p-6 border backdrop-blur-md ${
+          scanProgress.status === 'error' ? 'bg-red-900/40 border-red-500/50' :
+          scanProgress.status === 'completed' ? 'bg-green-900/40 border-green-500/50' :
+          'bg-slate-800/60 border-slate-700/50'
         }`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${
-                scanProgress.status === 'error' ? 'bg-red-400' :
-                scanProgress.status === 'completed' ? 'bg-green-400' :
-                'bg-blue-400'
-              }`}></div>
-              <span className={`font-medium ${
-                scanProgress.status === 'error' ? 'text-red-200' :
-                scanProgress.status === 'completed' ? 'text-green-200' :
-                'text-blue-200'
+          {/* Header with Icon and Status */}
+          <div className="flex items-center space-x-3 mb-6">
+            <div className={`relative w-12 h-12 rounded-full flex items-center justify-center ${
+              scanProgress.status === 'error' ? 'bg-red-500/20' :
+              scanProgress.status === 'completed' ? 'bg-green-500/20' :
+              'bg-blue-500/20'
+            }`}>
+              {/* Animated Icon */}
+              <div className={`text-2xl ${
+                scanProgress.status === 'capturing' ? 'animate-pulse' :
+                scanProgress.status === 'processing' ? 'animate-spin' :
+                scanProgress.status === 'running_ml' ? 'animate-bounce' :
+                scanProgress.status === 'completed' ? 'animate-pulse' :
+                'animate-spin'
               }`}>
-                {scanProgress.status === 'capturing' ? '📡 Capturing Packets' :
-                 scanProgress.status === 'processing' ? '⚙️ Processing Flows' :
-                 scanProgress.status === 'running_ml' ? '🧠 Running Detection' :
-                 scanProgress.status === 'completed' ? '✅ Scan Complete' :
-                 scanProgress.status === 'error' ? '❌ Scan Failed' :
-                 '🔄 Starting Scan'}
+                {scanProgress.status === 'capturing' ? '📡' :
+                 scanProgress.status === 'processing' ? '⚙️' :
+                 scanProgress.status === 'running_ml' ? '🧠' :
+                 scanProgress.status === 'completed' ? '✅' :
+                 scanProgress.status === 'error' ? '❌' :
+                 '🔄'}
+              </div>
+              
+              {/* Rotating Ring */}
+              <div className={`absolute inset-0 rounded-full border-2 ${
+                scanProgress.status === 'error' ? 'border-red-500' :
+                scanProgress.status === 'completed' ? 'border-green-500' :
+                'border-blue-500'
+              } border-t-transparent animate-spin`}></div>
+            </div>
+            
+            <div>
+              <span className={`font-bold text-lg ${
+                scanProgress.status === 'error' ? 'text-red-300' :
+                scanProgress.status === 'completed' ? 'text-green-300' :
+                'text-blue-300'
+              }`}>
+                {scanProgress.status === 'capturing' ? 'Capturing Network Traffic' :
+                 scanProgress.status === 'processing' ? 'Analyzing Data Flows' :
+                 scanProgress.status === 'running_ml' ? 'Running AI Detection' :
+                 scanProgress.status === 'completed' ? 'Scan Complete' :
+                 scanProgress.status === 'error' ? 'Scan Failed' :
+                 'Initializing Scan'}
               </span>
+              <p className={`text-sm mt-1 ${
+                scanProgress.status === 'error' ? 'text-red-400' :
+                scanProgress.status === 'completed' ? 'text-green-400' :
+                'text-slate-400'
+              }`}>
+                {scanProgress.message}
+              </p>
             </div>
-            <span className={`text-sm ${
-              scanProgress.status === 'error' ? 'text-red-300' :
-              scanProgress.status === 'completed' ? 'text-green-300' :
-              'text-blue-300'
-            }`}>{scanProgress.progress}%</span>
           </div>
-          
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
-            <div 
-              className={`h-2 rounded-full transition-all duration-500 ${
-                scanProgress.status === 'error' ? 'bg-red-500' :
-                scanProgress.status === 'completed' ? 'bg-green-500' :
-                'bg-blue-500'
-              }`}
-              style={{ width: `${scanProgress.progress}%` }}
-            ></div>
-          </div>
-          
-          {/* Status Message */}
-          <p className={`text-sm ${
-            scanProgress.status === 'error' ? 'text-red-300' :
-            scanProgress.status === 'completed' ? 'text-green-300' :
-            'text-blue-300'
-          }`}>
-            {scanProgress.message}
-          </p>
-          
-          {/* Phase Indicators */}
-          <div className="flex justify-between mt-3 text-xs">
-            <div className={`flex items-center space-x-1 ${
-              scanProgress.progress >= 10 ? 'text-blue-300' : 'text-gray-500'
-            }`}>
-              <span>{scanProgress.progress >= 10 ? '✓' : '○'}</span>
-              <span>Capture</span>
-            </div>
-            <div className={`flex items-center space-x-1 ${
-              scanProgress.progress >= 50 ? 'text-blue-300' : 'text-gray-500'
-            }`}>
-              <span>{scanProgress.progress >= 50 ? '✓' : '○'}</span>
-              <span>Flows</span>
-            </div>
-            <div className={`flex items-center space-x-1 ${
-              scanProgress.progress >= 85 ? 'text-blue-300' : 'text-gray-500'
-            }`}>
-              <span>{scanProgress.progress >= 85 ? '✓' : '○'}</span>
-              <span>Detection</span>
-            </div>
-            <div className={`flex items-center space-x-1 ${
-              scanProgress.progress >= 100 ? 'text-green-300' : 'text-gray-500'
-            }`}>
-              <span>{scanProgress.progress >= 100 ? '✓' : '○'}</span>
-              <span>Results</span>
-            </div>
+
+          {/* Phase Indicators with Icons */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { phase: 'Capture', icon: '📡', progress: 10 },
+              { phase: 'Process', icon: '⚙️', progress: 50 },
+              { phase: 'Detect', icon: '🧠', progress: 85 },
+              { phase: 'Results', icon: '📊', progress: 100 }
+            ].map((item, index) => (
+              <div key={index} className="text-center">
+                <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-2 transition-all duration-500 ${
+                  scanProgress.progress >= item.progress 
+                    ? scanProgress.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                      scanProgress.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                      'bg-blue-500/20 text-blue-400'
+                    : 'bg-slate-700/50 text-slate-500'
+                }`}>
+                  <span className="text-xl">{item.icon}</span>
+                </div>
+                <div className={`text-xs font-medium transition-all duration-500 ${
+                  scanProgress.progress >= item.progress 
+                    ? scanProgress.status === 'error' ? 'text-red-400' :
+                      scanProgress.status === 'completed' ? 'text-green-400' :
+                      'text-blue-400'
+                    : 'text-slate-500'
+                }`}>
+                  {scanProgress.progress >= item.progress ? '✓' : '○'} {item.phase}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

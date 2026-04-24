@@ -751,6 +751,137 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
         logger.info("WebSocket client disconnected")
 
+# Packet monitoring state
+packet_monitoring = {"active": False, "capture_thread": None, "stop_requested": False}
+
+@app.post("/packet-monitor/start")
+async def start_packet_monitoring():
+    """Start real-time packet monitoring"""
+    global packet_monitoring
+    
+    if packet_monitoring["active"]:
+        return {"status": "already_running", "message": "Packet monitoring already active"}
+    
+    try:
+        packet_monitoring["active"] = True
+        packet_monitoring["stop_requested"] = False
+        
+        # Start background packet monitoring task
+        asyncio.create_task(background_packet_monitoring())
+        
+        # Broadcast to all WebSocket clients
+        await manager.broadcast(json.dumps({
+            "type": "packet_monitor_status",
+            "data": {"active": True, "message": "Packet monitoring started"}
+        }))
+        
+        return {"status": "success", "message": "Packet monitoring started"}
+        
+    except Exception as e:
+        logger.error(f"Failed to start packet monitoring: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/packet-monitor/stop")
+async def stop_packet_monitoring():
+    """Stop real-time packet monitoring"""
+    global packet_monitoring
+    
+    if not packet_monitoring["active"]:
+        return {"status": "not_running", "message": "Packet monitoring not active"}
+    
+    try:
+        # Set stop flag
+        packet_monitoring["stop_requested"] = True
+        packet_monitoring["active"] = False
+        
+        # Broadcast to all WebSocket clients
+        await manager.broadcast(json.dumps({
+            "type": "packet_monitor_status", 
+            "data": {"active": False, "message": "Packet monitoring stopped"}
+        }))
+        
+        return {"status": "success", "message": "Packet monitoring stopped"}
+        
+    except Exception as e:
+        logger.error(f"Failed to stop packet monitoring: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/packet-monitor/status")
+async def get_packet_monitor_status():
+    """Get packet monitoring status"""
+    return {
+        "status": "success",
+        "monitoring_active": packet_monitoring["active"]
+    }
+
+async def background_packet_monitoring():
+    """Background task for real-time packet monitoring"""
+    global packet_monitoring
+    
+    while packet_monitoring["active"] and not packet_monitoring["stop_requested"]:
+        try:
+            # Check if stop was requested
+            if packet_monitoring["stop_requested"]:
+                logger.info("Stop requested, exiting packet monitoring")
+                break
+                
+            # Capture packets for 1 second (shorter duration for faster response)
+            from scapy.all import sniff, IP, TCP, UDP, ICMP
+            from datetime import datetime
+            import threading
+            
+            packets = []
+            
+            def packet_callback(packet):
+                # Check stop flag during packet processing
+                if packet_monitoring["stop_requested"]:
+                    return
+                    
+                if packet.haslayer(IP):
+                    ip_layer = packet[IP]
+                    packet_info = {
+                        "timestamp": datetime.now().isoformat(),
+                        "src_ip": ip_layer.src,
+                        "dst_ip": ip_layer.dst,
+                        "protocol": "TCP" if packet.haslayer(TCP) else "UDP" if packet.haslayer(UDP) else "ICMP" if packet.haslayer(ICMP) else "OTHER",
+                        "size": len(packet),
+                        "src_port": packet[TCP].sport if packet.haslayer(TCP) else packet[UDP].sport if packet.haslayer(UDP) else None,
+                        "dst_port": packet[TCP].dport if packet.haslayer(TCP) else packet[UDP].dport if packet.haslayer(UDP) else None,
+                        "flags": str(packet[TCP].flags) if packet.haslayer(TCP) else None
+                    }
+                    packets.append(packet_info)
+                    
+                    # Broadcast packet to WebSocket clients
+                    try:
+                        asyncio.create_task(manager.broadcast(json.dumps({
+                            "type": "packet",
+                            "data": packet_info
+                        })))
+                    except Exception as e:
+                        logger.error(f"Error broadcasting packet: {str(e)}")
+            
+            # Capture packets for 1 second with stop check
+            try:
+                sniff(prn=packet_callback, store=0, timeout=1)
+            except Exception as e:
+                logger.error(f"Error in packet capture: {str(e)}")
+            
+            # Check stop flag before continuing
+            if packet_monitoring["stop_requested"]:
+                logger.info("Stop requested after capture, exiting")
+                break
+                
+            # Wait before next capture cycle
+            await asyncio.sleep(0.5)  # Shorter wait for faster response
+            
+        except Exception as e:
+            logger.error(f"Error in packet monitoring: {str(e)}")
+            await asyncio.sleep(1)  # Wait before retry
+    
+    logger.info("Packet monitoring stopped")
+    packet_monitoring["active"] = False
+    packet_monitoring["stop_requested"] = False
+
 @app.post("/monitoring/start")
 async def start_continuous_monitoring():
     """Start continuous monitoring mode"""
